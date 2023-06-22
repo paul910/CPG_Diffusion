@@ -165,7 +165,7 @@ class Diffusion:
 
                 x_noise_pred = self.model(x_t, graph.edge_index.to(self.device), t)
 
-                loss = self.calculate_loss(x_noise_pred, x_noise)
+                loss = self.calculate_loss(x_noise_pred.to(self.device), x_noise.to(self.device))
                 loss.backward()
                 self.optimizer.step()
 
