@@ -1,68 +1,18 @@
-import matplotlib.pyplot as plt
-import numpy as np
 import os
+from datetime import datetime
+
 import torch
-import wandb
 import torch.nn.functional as F
-from scipy.sparse import coo_matrix
-from torch import nn, Tensor
+from torch import Tensor
 from torch.optim import Adam
 from torch_geometric.data import Dataset
 from torch_geometric.loader import DataLoader
-from torch_geometric.utils import dense_to_sparse, to_dense_adj
 from tqdm import tqdm
 
+import wandb
 from dataset import CPGDataset
-from model import GDNN
-
-
-def geometric_beta_schedule(timesteps, start=0.0001, end=0.02):
-    decay_rate = (end / start) ** (1.0 / (timesteps - 1))
-    return torch.tensor([start * decay_rate ** i for i in range(timesteps)])
-
-
-def get_index_from_list(vals, t, x_shape):
-    batch_size = t.shape[0]
-    vals = vals.to(t.device)
-    out = vals.gather(-1, t)
-    return out.reshape(batch_size, *((1,) * (len(x_shape) - 1)))
-
-
-def to_adj(edge_index):
-    return to_dense_adj(edge_index).squeeze()
-
-
-def to_edge_index(adj):
-    return dense_to_sparse(adj)[0]
-
-
-def convert_adj_to_edge_index_and_edge_attr(adj):
-    coo = coo_matrix(adj)
-    edge_index = torch.tensor(np.vstack((np.array(coo.row), np.array(coo.col))), dtype=torch.long)
-    edge_attr = torch.tensor(coo.data, dtype=torch.float)
-    edge_attr = normalize(edge_attr)
-    return edge_index, edge_attr
-
-
-def normalize(matrix):
-    min_val = torch.min(matrix)
-    max_val = torch.max(matrix)
-    return (matrix - min_val) / (max_val - min_val)
-
-
-def plot(value, x_axis=None, yaxis=None, title=None):
-    if isinstance(value, torch.Tensor):
-        value = value.detach().cpu().numpy()
-    plt.figure(figsize=(10, 10))
-    chart = plt.imshow(value)
-    plt.colorbar(chart, label='Pixel Value')
-    if x_axis is not None:
-        plt.xlabel(x_axis)
-    if yaxis is not None:
-        plt.ylabel(yaxis)
-    if title is not None:
-        plt.title(title)
-    plt.show()
+from model import GDNN, GraphUNet
+from utils import geometric_beta_schedule, get_index_from_list, plot, to_adj
 
 
 class Diffusion:
@@ -79,11 +29,18 @@ class Diffusion:
         self.train_loader = DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True)
         self.test_loader = DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False)
 
+        self.model = "GraphUNet"
+
         self.model_path = model_path
         self.model_depth = 6
         self.model_mult_factor = 2
         self.time_embedding_size = 64
-        self.model = GDNN(self.num_node_features, self.time_embedding_size, self.model_depth, self.model_mult_factor).to(self.device)
+
+        if self.model == "GDNN":
+            self.model = GDNN(self.num_node_features, self.time_embedding_size, self.model_depth,
+                              self.model_mult_factor).to(self.device)
+        elif self.model == "GraphUNet":
+            self.model = GraphUNet(self.num_node_features, 1028, self.num_node_features, self.model_depth).to(self.device)
 
         if os.path.exists(self.model_path):
             self.model.load_state_dict(torch.load(self.model_path, map_location=self.device))
@@ -175,11 +132,14 @@ class Diffusion:
 
                 x_noise_pred = self.model(x_t, graph.edge_index.to(self.device), t)
 
-                loss, smooth_l1_loss, mse_loss, kl_loss = self.calculate_loss(x_noise_pred.to(self.device), x_noise.to(self.device))
+                loss, smooth_l1_loss, mse_loss, kl_loss = self.calculate_loss(x_noise_pred.to(self.device),
+                                                                              x_noise.to(self.device))
                 loss.backward()
                 self.optimizer.step()
 
-                self.wandb.log({"loss": loss.item(), "smooth_l1_loss": smooth_l1_loss.item(), "mse_loss": mse_loss.item(), "kl_loss": kl_loss.item()})
+                self.wandb.log(
+                    {"loss": loss.item(), "smooth_l1_loss": smooth_l1_loss.item(), "mse_loss": mse_loss.item(),
+                     "kl_loss": kl_loss.item()})
 
             if self.model_path is not None:
                 self.save_model()
@@ -225,7 +185,7 @@ class Diffusion:
         x = self.sample(128)
 
         for step, i in enumerate(x):
-            if step % (self.T/num_show) == 0:
+            if step % (self.T / num_show) == 0:
                 plot(i)
 
     def show_forward_diff(self, show_adj=False, show_x=False):
@@ -248,14 +208,12 @@ class Diffusion:
 
 def main():
     data_path = "data/reveal/"
-    model_path = "models/CPG_1.pth"
-    dataset = CPGDataset(data_path)
+    model_path = f"models/model_{datetime.now().time()}.pth"
+    dataset = CPGDataset(data_path, model_path)
 
     diffusion = Diffusion(dataset, model_path)
     diffusion.train()
     diffusion.show_sample()
-
-
 
 
 if __name__ == '__main__':

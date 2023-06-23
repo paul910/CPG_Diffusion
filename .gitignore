@@ -2,6 +2,8 @@
 data/
 models/
 wandb/
+processed/
+raw/
 
 
 # Byte-compiled / optimized / DLL files
