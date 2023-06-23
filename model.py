@@ -137,7 +137,7 @@ class GraphUNet(torch.nn.Module):
     def forward(self, x: Tensor, edge_index: Tensor, timestep: Tensor,
                 batch: OptTensor = None) -> Tensor:
         """"""
-        t = self.time_mlp(timestep)
+        t_mlp = self.time_mlp(timestep)
 
         if batch is None:
             batch = edge_index.new_zeros(x.size(0))
@@ -157,7 +157,7 @@ class GraphUNet(torch.nn.Module):
             x, edge_index, edge_weight, batch, perm, _ = self.pools[i - 1](
                 x, edge_index, edge_weight, batch)
 
-            t = self.down_time[i - 1](t)
+            t = self.down_time[i - 1](t_mlp)
             x = x + t
             x = self.down_convs[i](x, edge_index, edge_weight)
             x = self.act(x)
@@ -180,7 +180,7 @@ class GraphUNet(torch.nn.Module):
             up[perm] = x
             x = res + up if self.sum_res else torch.cat((res, up), dim=-1)
 
-            t = self.down_time[i](t)
+            t = self.down_time[i](t_mlp)
             x = x + t
             x = self.up_convs[i](x, edge_index, edge_weight)
             x = self.act(x) if i < self.depth - 1 else x
