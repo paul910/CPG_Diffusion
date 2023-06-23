@@ -46,13 +46,13 @@ class Block(nn.Module):
         super().__init__()
         self.time_mlp = nn.Linear(time_emb_dim, out_ch)
         self.conv1 = GCNConv(in_ch, out_ch)
-        self.conv2 = GCNConv(out_ch, out_ch)
+        #self.conv2 = GCNConv(out_ch, out_ch)
         self.bn1 = nn.BatchNorm1d(out_ch)
-        self.bn2 = nn.BatchNorm1d(out_ch)
+        #self.bn2 = nn.BatchNorm1d(out_ch)
         self.relu = nn.ReLU()
 
     def forward(self, x, edge_index, t):
-        h = self.bn1(self.relu(self.conv1(x, edge_index)))
+        h = self.conv1(x, edge_index)  # self.bn1(self.relu(self.conv1(x, edge_index)))
         time_emb = self.relu(self.time_mlp(t))
         time_emb = time_emb.repeat(h.shape[0], 1)
         return self.bn2(self.relu(self.conv2(h + time_emb, edge_index)))
