@@ -106,20 +106,21 @@ class GraphUNet(torch.nn.Module):
         )
 
         self.down_convs = torch.nn.ModuleList()
+        self.down_time = torch.nn.ModuleList()
         self.pools = torch.nn.ModuleList()
-        self.time = torch.nn.ModuleList()
         self.down_convs.append(GCNConv(in_channels, channels, improved=True))
         for i in range(depth):
             self.pools.append(TopKPooling(channels, self.pool_ratios[i]))
             self.down_convs.append(GCNConv(channels, channels, improved=True))
-            self.time.append(nn.Linear(self.time_emb_dim, channels))
+            self.down_time.append(nn.Linear(self.time_emb_dim, channels))
 
         in_channels = channels if sum_res else 2 * channels
 
         self.up_convs = torch.nn.ModuleList()
+        self.up_time = torch.nn.ModuleList()
         for i in range(depth - 1):
             self.up_convs.append(GCNConv(in_channels, channels, improved=True))
-            self.time.append(nn.Linear(self.time_emb_dim, channels))
+            self.up_time.append(nn.Linear(self.time_emb_dim, channels))
         self.up_convs.append(GCNConv(in_channels, out_channels, improved=True))
 
         self.reset_parameters()
@@ -156,7 +157,7 @@ class GraphUNet(torch.nn.Module):
             x, edge_index, edge_weight, batch, perm, _ = self.pools[i - 1](
                 x, edge_index, edge_weight, batch)
 
-            t = self.time[i - 1](t)
+            t = self.down_time[i - 1](t)
             x = x + t
             x = self.down_convs[i](x, edge_index, edge_weight)
             x = self.act(x)
@@ -179,7 +180,7 @@ class GraphUNet(torch.nn.Module):
             up[perm] = x
             x = res + up if self.sum_res else torch.cat((res, up), dim=-1)
 
-            t = self.time[i](t)
+            t = self.down_time[i](t)
             x = x + t
             x = self.up_convs[i](x, edge_index, edge_weight)
             x = self.act(x) if i < self.depth - 1 else x
