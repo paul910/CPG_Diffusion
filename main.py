@@ -21,7 +21,7 @@ class Diffusion:
 
         self.batch_size = 1
         self.epochs = 1000
-        self.learning_rate = 0.00001
+        self.learning_rate = 0.0001
 
         self.dataset = dataset
         self.num_node_features = 178
@@ -32,9 +32,9 @@ class Diffusion:
         self.model = "GraphUNet"
 
         self.model_path = model_path
-        self.model_depth = 3
+        self.model_depth = 2
         self.model_mult_factor = 2
-        self.time_embedding_size = 64
+        self.time_embedding_size = 32
 
         if self.model == "GDNN":
             self.model = GDNN(self.num_node_features, self.time_embedding_size, self.model_depth,
