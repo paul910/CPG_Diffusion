@@ -71,7 +71,7 @@ class Diffusion:
 
         self.batch_size = 1
         self.epochs = 1000
-        self.learning_rate = 0.001
+        self.learning_rate = 0.0001
 
         self.dataset = dataset
         self.num_node_features = 178
