@@ -71,7 +71,7 @@ class Diffusion:
 
         self.batch_size = 1
         self.epochs = 1000
-        self.learning_rate = 0.0001
+        self.learning_rate = 0.001
 
         self.dataset = dataset
         self.num_node_features = 178
@@ -150,8 +150,8 @@ class Diffusion:
     @staticmethod
     def calculate_loss(x_pred: Tensor, x_target: Tensor):
 
-        p = F.softmax(x_target, dim=1)
-        q = F.softmax(x_pred, dim=1)
+        p = F.softmax(x_pred, dim=1)
+        q = F.softmax(x_target, dim=1)
 
         smooth_l1_loss = F.smooth_l1_loss(x_target, x_pred)
         mse_loss = F.mse_loss(x_target, x_pred)
