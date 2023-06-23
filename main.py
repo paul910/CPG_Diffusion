@@ -149,7 +149,17 @@ class Diffusion:
 
     @staticmethod
     def calculate_loss(x_pred: Tensor, x_target: Tensor):
-        return F.smooth_l1_loss(x_target, x_pred)
+
+        p = F.softmax(x_target, dim=1)
+        q = F.softmax(x_pred, dim=1)
+
+        smooth_l1_loss = F.smooth_l1_loss(x_target, x_pred)
+        mse_loss = F.mse_loss(x_target, x_pred)
+        kl_loss = F.kl_div(p, q)
+
+        loss = smooth_l1_loss + mse_loss + kl_loss
+
+        return loss, smooth_l1_loss, mse_loss, kl_loss
 
     def train(self):
         self.model.train()
@@ -165,11 +175,11 @@ class Diffusion:
 
                 x_noise_pred = self.model(x_t, graph.edge_index.to(self.device), t)
 
-                loss = self.calculate_loss(x_noise_pred.to(self.device), x_noise.to(self.device))
+                loss, smooth_l1_loss, mse_loss, kl_loss = self.calculate_loss(x_noise_pred.to(self.device), x_noise.to(self.device))
                 loss.backward()
                 self.optimizer.step()
 
-                self.wandb.log({"loss": loss.item()})
+                self.wandb.log({"loss": loss.item(), "smooth_l1_loss": smooth_l1_loss.item(), "mse_loss": mse_loss.item(), "kl_loss": kl_loss.item()})
 
             if self.model_path is not None:
                 self.save_model()
