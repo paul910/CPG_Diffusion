@@ -132,8 +132,13 @@ class Diffusion:
 
                 x_noise_pred = self.model(x_t, graph.edge_index.to(self.device), t)
 
+                print(x_noise_pred.shape, x_noise.shape)
+
                 loss, smooth_l1_loss, mse_loss, kl_loss = self.calculate_loss(x_noise_pred.to(self.device),
                                                                               x_noise.to(self.device))
+                print(f"Loss: {loss.item()}, Smooth L1 Loss: {smooth_l1_loss.item()}, MSE Loss: {mse_loss.item()}, "
+                      f"KL Loss: {kl_loss.item()}")
+
                 loss.backward()
                 self.optimizer.step()
 
