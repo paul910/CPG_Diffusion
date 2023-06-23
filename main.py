@@ -32,7 +32,7 @@ class Diffusion:
         self.model = "GraphUNet"
 
         self.model_path = model_path
-        self.model_depth = 6
+        self.model_depth = 3
         self.model_mult_factor = 2
         self.time_embedding_size = 64
 
@@ -63,7 +63,7 @@ class Diffusion:
     def config_wandb(self):
         self.wandb.init(
             # set the wandb project where this run will be logged
-            project="CPG_Diffusion",
+            project="CPG_Diffusion_UNet",
 
             # track hyperparameters and run metadata
             config={
@@ -107,16 +107,12 @@ class Diffusion:
     @staticmethod
     def calculate_loss(x_pred: Tensor, x_target: Tensor):
 
-        p = F.softmax(x_pred, dim=1)
-        q = F.softmax(x_target, dim=1)
-
         smooth_l1_loss = F.smooth_l1_loss(x_target, x_pred)
         mse_loss = F.mse_loss(x_target, x_pred)
-        kl_loss = F.kl_div(p, q)
 
-        loss = smooth_l1_loss + mse_loss + kl_loss
+        loss = smooth_l1_loss + mse_loss
 
-        return loss, smooth_l1_loss, mse_loss, kl_loss
+        return loss, smooth_l1_loss, mse_loss
 
     def train(self):
         self.model.train()
@@ -132,20 +128,13 @@ class Diffusion:
 
                 x_noise_pred = self.model(x_t, graph.edge_index.to(self.device), t)
 
-                print(x_noise_pred.unique())
-                print(x_noise.unique())
-
-                loss, smooth_l1_loss, mse_loss, kl_loss = self.calculate_loss(x_noise_pred.to(self.device),
-                                                                              x_noise.to(self.device))
-                print(f"Loss: {loss.item()}, Smooth L1 Loss: {smooth_l1_loss.item()}, MSE Loss: {mse_loss.item()}, "
-                      f"KL Loss: {kl_loss.item()}")
+                loss, smooth_l1_loss, mse_loss = self.calculate_loss(x_noise_pred.to(self.device),
+                                                                     x_noise.to(self.device))
 
                 loss.backward()
                 self.optimizer.step()
 
-                self.wandb.log(
-                    {"loss": loss.item(), "smooth_l1_loss": smooth_l1_loss.item(), "mse_loss": mse_loss.item(),
-                     "kl_loss": kl_loss.item()})
+                self.wandb.log({"loss": loss.item(), "smooth_l1_loss": smooth_l1_loss.item(), "mse_loss": mse_loss.item()})
 
             if self.model_path is not None:
                 self.save_model()
