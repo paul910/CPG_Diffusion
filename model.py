@@ -55,7 +55,7 @@ class Block(nn.Module):
         h = self.conv1(x, edge_index)  # self.bn1(self.relu(self.conv1(x, edge_index)))
         time_emb = self.relu(self.time_mlp(t))
         time_emb = time_emb.repeat(h.shape[0], 1)
-        return self.bn2(self.relu(self.conv2(h + time_emb, edge_index)))
+        return self.bn1(self.relu(self.conv2(h + time_emb, edge_index)))
 
 
 class SinusoidalPositionEmbeddings(nn.Module):
