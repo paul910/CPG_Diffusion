@@ -80,9 +80,9 @@ class Diffusion:
         self.test_loader = DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False)
 
         self.model_path = model_path
-        self.model_depth = 4
-        self.model_mult_factor = 3
-        self.time_embedding_size = 32
+        self.model_depth = 6
+        self.model_mult_factor = 2
+        self.time_embedding_size = 64
         self.model = GDNN(self.num_node_features, self.time_embedding_size, self.model_depth, self.model_mult_factor).to(self.device)
 
         if os.path.exists(self.model_path):
