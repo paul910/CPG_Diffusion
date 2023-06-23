@@ -42,11 +42,8 @@ class GDNN(nn.Module):
         x = self.relu(self.bn_in(self.conv_x_in(x, edge_index)))
         for conv in self.conv_x:
             x = conv(x, edge_index, t)
-        x = self.bn_out(self.conv_x_out(x, edge_index))
-
-        x1 = self.softmax(x[:, :50])  # Apply softmax to the first 50 features
-        x2 = x[:, 50:]  # No activation for the rest
-        return torch.cat((x1, x2), dim=1)
+        x = self.relu(self.bn_out(self.conv_x_out(x, edge_index)))
+        return x
 
 
 class Block(nn.Module):
