@@ -14,6 +14,12 @@ class GDNN(nn.Module):
         self.mult_factor = model_mult_factor
         self.time_emb_dim = time_emb_dim
 
+        self.relu = nn.ReLU()
+        self.softmax = nn.Softmax(dim=1)
+
+        self.bn_in = nn.BatchNorm1d(in_channels * self.mult_factor)
+        self.bn_out = nn.BatchNorm1d(in_channels)
+
         self.conv_x_in = GCNConv(in_channels, in_channels * self.mult_factor)
 
         self.conv_x = nn.ModuleList(
@@ -33,12 +39,14 @@ class GDNN(nn.Module):
     def forward(self, x: Tensor, edge_index: Tensor, timestep: Tensor):
         t = self.time_mlp(timestep)
 
-        x = self.conv_x_in(x, edge_index)
+        x = self.relu(self.bn_in(self.conv_x_in(x, edge_index)))
         for conv in self.conv_x:
             x = conv(x, edge_index, t)
-        x = self.conv_x_out(x, edge_index)
+        x = self.bn_out(self.conv_x_out(x, edge_index))
 
-        return x
+        x1 = self.softmax(x[:, :50])  # Apply softmax to the first 50 features
+        x2 = x[:, 50:]  # No activation for the rest
+        return torch.cat((x1, x2), dim=1)
 
 
 class Block(nn.Module):
