@@ -201,9 +201,9 @@ def main():
     dataset = CPGDataset(data_path, model_path)
     diffusion = Diffusion(dataset, model_path)
 
-    diffusion.show_sample()
+    #diffusion.show_sample()
 
-    diffusion.show_forward_diff()
+    #diffusion.show_forward_diff()
 
     diffusion.train()
 
