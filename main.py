@@ -82,14 +82,12 @@ class Diffusion:
 
     def forward_diffusion_sample(self, input: Tensor, t: Tensor):
         noise = torch.randn_like(input)
-
         sqrt_alphas_cumprod_t = get_index_from_list(self.sqrt_alphas_cumprod, t, input.shape)
-        sqrt_one_minus_alphas_cumprod_t = get_index_from_list(self.sqrt_one_minus_alphas_cumprod, t, input.shape)
-
-        out = sqrt_alphas_cumprod_t.to(self.device) * input.to(self.device) + sqrt_one_minus_alphas_cumprod_t.to(
-            self.device) * noise.to(self.device)
-
-        return out, noise
+        sqrt_one_minus_alphas_cumprod_t = get_index_from_list(
+            self.sqrt_one_minus_alphas_cumprod, t, input.shape
+        )
+        return sqrt_alphas_cumprod_t.to(self.device) * input.to(self.device) \
+               + sqrt_one_minus_alphas_cumprod_t.to(self.device) * noise.to(self.device), noise.to(self.device)
 
     @staticmethod
     def calculate_loss(x_pred: Tensor, x_target: Tensor):
@@ -135,24 +133,22 @@ class Diffusion:
 
     @torch.no_grad()
     def sample_timestep(self, x, edge_index, t):
-        x_betas_t = get_index_from_list(self.betas, t, x.shape)
-        x_sqrt_one_minus_alphas_cumprod_t = get_index_from_list(
+        betas_t = get_index_from_list(self.betas, t, x.shape)
+        sqrt_one_minus_alphas_cumprod_t = get_index_from_list(
             self.sqrt_one_minus_alphas_cumprod, t, x.shape
         )
-        x_sqrt_recip_alphas_t = get_index_from_list(self.sqrt_recip_alphas, t, x.shape)
+        sqrt_recip_alphas_t = get_index_from_list(self.sqrt_recip_alphas, t, x.shape)
 
-        x_noise_pred = self.model(x, edge_index, t)
-
-        x_model_mean = x_sqrt_recip_alphas_t * (
-                x - x_betas_t * x_noise_pred / x_sqrt_one_minus_alphas_cumprod_t
+        model_mean = sqrt_recip_alphas_t * (
+                x - betas_t * self.model(x, edge_index, t) / sqrt_one_minus_alphas_cumprod_t
         )
-        x_posterior_variance_t = get_index_from_list(self.posterior_variance, t, x.shape)
+        posterior_variance_t = get_index_from_list(self.posterior_variance, t, x.shape)
 
         if t == 0:
-            return x_model_mean
+            return model_mean
         else:
-            x_noise = torch.randn_like(x)
-            return x_model_mean + torch.sqrt(x_posterior_variance_t) * x_noise
+            noise = torch.randn_like(x)
+            return model_mean + torch.sqrt(posterior_variance_t) * noise
 
     @torch.no_grad()
     def sample(self):
@@ -166,13 +162,14 @@ class Diffusion:
         for i in tqdm(reversed(range(self.T)), total=self.T, desc='Sampling'):
             t = torch.full((1,), i, dtype=torch.long, device=self.device)
             x = self.sample_timestep(x, edge_index, t)
-            x_out.append(x.clamp(-1, 1))
+            x_out.append(x)
 
         return x_out
 
-    def show_sample(self, num_show=10):
+    def show_sample(self, num_show=10, pre_processed=None):
         print("Showing samples")
-        x = self.sample()
+
+        x = self.sample() if pre_processed is None else pre_processed
 
         for step, i in enumerate(x):
             if step % (self.T / num_show) == 0:
@@ -198,11 +195,10 @@ class Diffusion:
 def main():
     data_path = "data/reveal/"
     model_path = f"models/model_{datetime.now().time()}.pth"
-    dataset = CPGDataset(data_path, model_path)
+    dataset = CPGDataset(data_path)
     diffusion = Diffusion(dataset, model_path)
 
     #diffusion.show_sample()
-
     #diffusion.show_forward_diff()
 
     diffusion.train()
