@@ -3,6 +3,7 @@ from datetime import datetime
 
 import torch
 import torch.nn.functional as F
+from matplotlib import pyplot as plt
 from torch import Tensor
 from torch.optim import Adam
 from torch_geometric.data import Dataset
@@ -12,11 +13,11 @@ from tqdm import tqdm
 import wandb
 from dataset import CPGDataset
 from model import GDNN, GraphUNet
-from utils import geometric_beta_schedule, get_index_from_list, plot, to_adj
+from utils import geometric_beta_schedule, get_index_from_list, plot, to_adj, normalize
 
 
 class Diffusion:
-    def __init__(self, dataset: Dataset, model_path=None):
+    def __init__(self, dataset: Dataset, model_path=None, ):
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
         self.batch_size = 1
@@ -24,12 +25,13 @@ class Diffusion:
         self.learning_rate = 0.0001
 
         self.dataset = dataset
-        self.num_node_features = 178
+        self.first_features = True
+        self.num_node_features = 50 if self.first_features else 128
         self.train_dataset, self.test_dataset = self.dataset.train_test_split()
         self.train_loader = DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True)
         self.test_loader = DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False)
 
-        self.model = "GDNN"
+        self.model = "GraphUNet"
 
         self.model_path = model_path
         self.model_depth = 2
@@ -40,7 +42,7 @@ class Diffusion:
             self.model = GDNN(self.num_node_features, self.time_embedding_size, self.model_depth,
                               self.model_mult_factor).to(self.device)
         elif self.model == "GraphUNet":
-            self.model = GraphUNet(self.num_node_features, 1028, self.num_node_features, self.model_depth).to(self.device)
+            self.model = GraphUNet(self.num_node_features, 512, self.num_node_features, self.model_depth).to(self.device)
 
         if os.path.exists(self.model_path):
             self.model.load_state_dict(torch.load(self.model_path, map_location=self.device))
@@ -57,8 +59,10 @@ class Diffusion:
         self.sqrt_one_minus_alphas_cumprod = torch.sqrt(1. - alphas_cumprod)
         self.posterior_variance = self.betas * (1. - alphas_cumprod_prev) / (1. - alphas_cumprod)
 
-        self.wandb = wandb
-        self.config_wandb()
+        self.log_wandb = True
+        if self.log_wandb:
+            self.wandb = wandb
+            self.config_wandb()
 
     def config_wandb(self):
         self.wandb.init(
@@ -76,33 +80,16 @@ class Diffusion:
             }
         )
 
-    def forward_diffusion_sample_x(self, x_0: Tensor, t: Tensor):
-        # Initialize noise term for each node
-        noise = torch.randn_like(x_0)
+    def forward_diffusion_sample(self, input: Tensor, t: Tensor):
+        noise = torch.randn_like(input)
 
-        # Get diffusion parameters for current time step
-        sqrt_alphas_cumprod_t = get_index_from_list(self.sqrt_alphas_cumprod, t, x_0.shape)
-        sqrt_one_minus_alphas_cumprod_t = get_index_from_list(self.sqrt_one_minus_alphas_cumprod, t, x_0.shape)
+        sqrt_alphas_cumprod_t = get_index_from_list(self.sqrt_alphas_cumprod, t, input.shape)
+        sqrt_one_minus_alphas_cumprod_t = get_index_from_list(self.sqrt_one_minus_alphas_cumprod, t, input.shape)
 
-        # Compute diffused state for each node
-        x_t = sqrt_alphas_cumprod_t.to(self.device) * x_0.to(self.device) + sqrt_one_minus_alphas_cumprod_t.to(
+        out = sqrt_alphas_cumprod_t.to(self.device) * input.to(self.device) + sqrt_one_minus_alphas_cumprod_t.to(
             self.device) * noise.to(self.device)
 
-        return x_t, noise
-
-    def forward_diffusion_sample_adj(self, adj_matrix: Tensor, t: Tensor):
-        # Initialize noise term for each edge
-        noise = torch.randn_like(adj_matrix)
-
-        # Get diffusion parameters for current time step
-        sqrt_alphas_cumprod_t = get_index_from_list(self.sqrt_alphas_cumprod, t, adj_matrix.shape)
-        sqrt_one_minus_alphas_cumprod_t = get_index_from_list(self.sqrt_one_minus_alphas_cumprod, t, adj_matrix.shape)
-
-        # Compute diffused state for each edge
-        adj_t = sqrt_alphas_cumprod_t.to(self.device) * adj_matrix.to(self.device) + sqrt_one_minus_alphas_cumprod_t.to(
-            self.device) * noise.to(self.device)
-
-        return adj_t, noise
+        return out, noise
 
     @staticmethod
     def calculate_loss(x_pred: Tensor, x_target: Tensor):
@@ -115,6 +102,7 @@ class Diffusion:
         return loss, smooth_l1_loss, mse_loss
 
     def train(self):
+        print((150 * '-') + '\n- Training model\n' + (150 * '-') + '\n')
         self.model.train()
 
         for epoch in range(self.epochs):
@@ -122,9 +110,11 @@ class Diffusion:
             for step, graph in enumerate(self.train_loader):
                 self.optimizer.zero_grad()
 
+                x = (graph.x[:, :50] - 0.5 if self.first_features else graph.x[:, 50:]) * 2
+
                 t = torch.randint(0, self.T, (1,), device=self.device).long()
 
-                x_t, x_noise = self.forward_diffusion_sample_x(graph.x, t)
+                x_t, x_noise = self.forward_diffusion_sample(x, t)
 
                 x_noise_pred = self.model(x_t, graph.edge_index.to(self.device), t)
 
@@ -134,10 +124,14 @@ class Diffusion:
                 loss.backward()
                 self.optimizer.step()
 
-                self.wandb.log({"loss": loss.item(), "smooth_l1_loss": smooth_l1_loss.item(), "mse_loss": mse_loss.item()})
+                if self.log_wandb:
+                    self.wandb.log({"loss": loss.item(), "smooth_l1_loss": smooth_l1_loss.item(), "mse_loss": mse_loss.item()})
 
             if self.model_path is not None:
                 self.save_model()
+
+            out = self.sample()
+            torch.save(out, f"out_{epoch}.pt")
 
     @torch.no_grad()
     def sample_timestep(self, x, edge_index, t):
@@ -161,40 +155,40 @@ class Diffusion:
             return x_model_mean + torch.sqrt(x_posterior_variance_t) * x_noise
 
     @torch.no_grad()
-    def sample(self, num_nodes):
+    def sample(self):
         self.model.eval()
 
-        x = torch.randn(num_nodes, self.num_node_features).to(self.device)
         edge_index = self.test_loader.dataset[0].edge_index.to(self.device)
+        x = torch.randn(to_adj(edge_index).shape[0], self.num_node_features).to(self.device)
 
         x_out = []
 
         for i in tqdm(reversed(range(self.T)), total=self.T, desc='Sampling'):
             t = torch.full((1,), i, dtype=torch.long, device=self.device)
             x = self.sample_timestep(x, edge_index, t)
-            x_out.append(x)
+            x_out.append(x.clamp(-1, 1))
 
         return x_out
 
     def show_sample(self, num_show=10):
-        x = self.sample(128)
+        print("Showing samples")
+        x = self.sample()
 
         for step, i in enumerate(x):
             if step % (self.T / num_show) == 0:
                 plot(i)
 
-    def show_forward_diff(self, show_adj=False, show_x=False):
+    def show_forward_diff(self):
+        print("Showing forward diffusion")
+
         for graph in self.train_loader:
+            x = (graph.x[:, :50] - 0.5 if self.first_features else graph.x[:, 50:]) * 2
+
             for step, t in enumerate(range(0, self.T, 100)):
                 t = torch.full((1,), t, dtype=torch.long, device=self.device)
-                if show_adj:
-                    adj, noise = self.forward_diffusion_sample_adj(to_adj(graph.edge_index), t)
-                    plot(adj, "Nodes", "Nodes", f"Step {step}")
-                    plot(noise, "Nodes", "Nodes", f"Step {step}")
-                if show_x:
-                    x, noise = self.forward_diffusion_sample_x(graph.x, t)
-                    plot(x, "Features", "Nodes", f"Step {step}")
-                    plot(noise, "Features", "Nodes", f"Step {step}")
+                x, noise = self.forward_diffusion_sample(x, t)
+                x = x.clamp(-1, 1)
+                plot(x, "Features", "Nodes", f"Step {step}")
             break
 
     def save_model(self):
@@ -205,10 +199,13 @@ def main():
     data_path = "data/reveal/"
     model_path = f"models/model_{datetime.now().time()}.pth"
     dataset = CPGDataset(data_path, model_path)
-
     diffusion = Diffusion(dataset, model_path)
-    diffusion.train()
+
     diffusion.show_sample()
+
+    diffusion.show_forward_diff()
+
+    diffusion.train()
 
 
 if __name__ == '__main__':
