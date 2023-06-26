@@ -20,7 +20,7 @@ class Diffusion:
     def __init__(self, dataset: Dataset, model_path=None, ):
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-        self.batch_size = 1
+        self.batch_size = 4
         self.epochs = 1000
         self.learning_rate = 0.0001
 
@@ -60,9 +60,7 @@ class Diffusion:
         self.posterior_variance = self.betas * (1. - alphas_cumprod_prev) / (1. - alphas_cumprod)
 
         self.log_wandb = True
-        if self.log_wandb:
-            self.wandb = wandb
-            self.config_wandb()
+        self.wandb = wandb
 
     def config_wandb(self):
         self.wandb.init(
@@ -100,21 +98,23 @@ class Diffusion:
         return loss, smooth_l1_loss, mse_loss
 
     def train(self):
+        if self.log_wandb:
+            self.config_wandb()
         print((150 * '-') + '\n- Training model\n' + (150 * '-') + '\n')
         self.model.train()
 
         for epoch in range(self.epochs):
             print((100 * '-') + f'\n- Epoch: {epoch}\n' + (100 * '-'))
-            for step, graph in enumerate(self.train_loader):
+            for step, batch in enumerate(self.train_loader):
                 self.optimizer.zero_grad()
 
-                x = (graph.x[:, :50] - 0.5 if self.first_features else graph.x[:, 50:]) * 2
+                x = (batch.x[:, :50] - 0.5 if self.first_features else batch.x[:, 50:]) * 2
 
-                t = torch.randint(0, self.T, (1,), device=self.device).long()
+                t = torch.randint(0, self.T, (self.batch_size,), device=self.device).long()
 
                 x_t, x_noise = self.forward_diffusion_sample(x, t)
 
-                x_noise_pred = self.model(x_t, graph.edge_index.to(self.device), t)
+                x_noise_pred = self.model(x_t, batch.edge_index.to(self.device), t, batch.batch.to(self.device))
 
                 loss, smooth_l1_loss, mse_loss = self.calculate_loss(x_noise_pred.to(self.device),
                                                                      x_noise.to(self.device))
