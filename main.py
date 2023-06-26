@@ -29,7 +29,7 @@ class Diffusion:
         self.train_loader = DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True)
         self.test_loader = DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False)
 
-        self.model = "GraphUNet"
+        self.model = "GDNN"
 
         self.model_path = model_path
         self.model_depth = 2
