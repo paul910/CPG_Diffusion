@@ -63,7 +63,7 @@ class Diffusion:
     def config_wandb(self):
         self.wandb.init(
             # set the wandb project where this run will be logged
-            project=f"CPG_Diffusion_{self.model.__class__}",
+            project=f"CPG_Diffusion_{self.model.__class__.__name__}",
 
             # track hyperparameters and run metadata
             config={
