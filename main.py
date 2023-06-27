@@ -114,6 +114,8 @@ class Diffusion:
 
                 x_t, x_noise = self.forward_diffusion_sample(x, t)
 
+                x_t = x_t.clamp(-1, 1)
+
                 x_noise_pred = self.model(x_t, graph.edge_index.to(self.device), t)
 
                 loss, smooth_l1_loss, mse_loss = self.calculate_loss(x_noise_pred.to(self.device),
@@ -162,7 +164,13 @@ class Diffusion:
         for i in tqdm(reversed(range(self.T)), total=self.T, desc='Sampling'):
             t = torch.full((1,), i, dtype=torch.long, device=self.device)
             x = self.sample_timestep(x, edge_index, t)
+            x = x.clamp(-1, 1)
             x_out.append(x)
+
+        # ensure one hot encoding for last timestep
+        max_values, _ = torch.max(x_out[-1], dim=1, keepdim=True)
+        print(max_values.max(), max_values.min())
+        x_out[-1] = torch.where(x_out[-1] == max_values, 1., -1.)
 
         return x_out
 
@@ -174,6 +182,8 @@ class Diffusion:
         for step, i in enumerate(x):
             if step % (self.T / num_show) == 0:
                 plot(i)
+
+        plot(x[-1], "out")
 
     def show_forward_diff(self):
         print("Showing forward diffusion")
@@ -198,8 +208,8 @@ def main():
     dataset = CPGDataset(data_path)
     diffusion = Diffusion(dataset, model_path)
 
-    #diffusion.show_sample()
     #diffusion.show_forward_diff()
+    #diffusion.show_sample()
 
     diffusion.train()
 
