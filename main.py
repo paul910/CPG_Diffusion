@@ -101,12 +101,12 @@ class Diffusion:
         return loss, smooth_l1_loss, mse_loss
 
     def train(self):
-        print((150 * '-') + '\n- Training model\n' + (150 * '-') + '\n')
+        print((100 * '-') + '\n- Training model\n' + (100 * '-'))
         self.model.train()
 
         for epoch in range(self.epochs):
-            print((100 * '-') + f'\n- Epoch: {epoch}\n' + (100 * '-'))
-            for step, graph in enumerate(self.train_loader):
+            print((40 * '-') + f'Epoch: {epoch}'.center(20) + (40 * '-'))
+            for step, graph in enumerate(tqdm(self.train_loader, total=len(self.train_loader), desc="Training")):
                 self.optimizer.zero_grad()
 
                 x = (graph.x[:, :50] - 0.5 if self.first_features else graph.x[:, 50:]) * 2
