@@ -1,9 +1,11 @@
 import os
+import warnings
+
+warnings.filterwarnings("ignore")
 from datetime import datetime
 
 import torch
 import torch.nn.functional as F
-from matplotlib import pyplot as plt
 from torch import Tensor
 from torch.optim import Adam
 from torch_geometric.data import Dataset
@@ -13,7 +15,7 @@ from tqdm import tqdm
 import wandb
 from dataset import CPGDataset
 from model import GDNN, GraphUNet
-from utils import geometric_beta_schedule, get_index_from_list, plot, to_adj, normalize
+from utils import geometric_beta_schedule, get_index_from_list, plot, to_adj
 
 
 class Diffusion:
@@ -43,7 +45,8 @@ class Diffusion:
             self.model = GDNN(self.num_node_features, self.time_embedding_size, self.model_depth,
                               self.model_mult_factor).to(self.device)
         elif self.model == "GraphUNet":
-            self.model = GraphUNet(self.num_node_features, 512, self.num_node_features, self.model_depth).to(self.device)
+            self.model = GraphUNet(self.num_node_features, 512, self.num_node_features, self.model_depth).to(
+                self.device)
 
         if os.path.exists(self.model_path):
             self.model.load_state_dict(torch.load(self.model_path, map_location=self.device))
@@ -124,7 +127,8 @@ class Diffusion:
                 self.optimizer.step()
 
                 if self.log_wandb:
-                    self.wandb.log({"loss": loss.item(), "smooth_l1_loss": smooth_l1_loss.item(), "mse_loss": mse_loss.item()})
+                    self.wandb.log(
+                        {"loss": loss.item(), "smooth_l1_loss": smooth_l1_loss.item(), "mse_loss": mse_loss.item()})
 
             if self.model_path is not None:
                 self.save_model()
@@ -206,8 +210,8 @@ def main():
     dataset = CPGDataset(data_path)
     diffusion = Diffusion(dataset, model_path)
 
-    #diffusion.show_forward_diff()
-    #diffusion.show_sample()
+    # diffusion.show_forward_diff()
+    # diffusion.show_sample()
 
     diffusion.train()
 
