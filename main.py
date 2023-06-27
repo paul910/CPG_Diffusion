@@ -22,7 +22,8 @@ class Diffusion:
 
         self.batch_size = 1
         self.epochs = 1000
-        self.learning_rate = 0.0001
+        self.learning_rate = 0.00001
+        self.weight_decay = 0.0001
 
         self.dataset = dataset
         self.first_features = True
@@ -47,7 +48,7 @@ class Diffusion:
         if os.path.exists(self.model_path):
             self.model.load_state_dict(torch.load(self.model_path, map_location=self.device))
 
-        self.optimizer = Adam(self.model.parameters(), lr=self.learning_rate)
+        self.optimizer = Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
 
         self.T = 1000
         self.betas = geometric_beta_schedule(timesteps=self.T)
@@ -113,8 +114,6 @@ class Diffusion:
                 t = torch.randint(0, self.T, (1,), device=self.device).long()
 
                 x_t, x_noise = self.forward_diffusion_sample(x, t)
-
-                x_t = x_t.clamp(-1, 1)
 
                 x_noise_pred = self.model(x_t, graph.edge_index.to(self.device), t)
 
