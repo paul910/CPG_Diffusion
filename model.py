@@ -62,9 +62,9 @@ class Block(nn.Module):
         super().__init__()
         self.time_mlp = nn.Linear(time_emb_dim, out_ch)
         self.conv1 = GCNConv(in_ch, out_ch)
-        # self.conv2 = GCNConv(out_ch, out_ch)
+        self.conv2 = GCNConv(out_ch, out_ch)
         self.bn1 = nn.BatchNorm1d(out_ch)
-        # self.bn2 = nn.BatchNorm1d(out_ch)
+        self.bn2 = nn.BatchNorm1d(out_ch)
         self.relu = nn.ReLU()
 
     def forward(self, x, edge_index, t):
@@ -107,21 +107,27 @@ class GraphUNet(torch.nn.Module):
 
         self.down_convs = torch.nn.ModuleList()
         self.down_time = torch.nn.ModuleList()
+        self.down_bn = torch.nn.ModuleList()
         self.pools = torch.nn.ModuleList()
         self.down_convs.append(GCNConv(in_channels, channels, improved=True))
+        self.down_bn.append(nn.BatchNorm1d(channels))
         for i in range(depth):
             self.pools.append(TopKPooling(channels, self.pool_ratios[i]))
             self.down_convs.append(GCNConv(channels, channels, improved=True))
             self.down_time.append(nn.Linear(self.time_emb_dim, channels))
+            self.down_bn.append(nn.BatchNorm1d(channels))
 
         in_channels = channels if sum_res else 2 * channels
 
         self.up_convs = torch.nn.ModuleList()
         self.up_time = torch.nn.ModuleList()
+        self.up_bn = torch.nn.ModuleList()
         for i in range(depth - 1):
             self.up_convs.append(GCNConv(in_channels, channels, improved=True))
             self.up_time.append(nn.Linear(self.time_emb_dim, channels))
+            self.up_bn.append(nn.BatchNorm1d(channels))
         self.up_convs.append(GCNConv(in_channels, out_channels, improved=True))
+        self.up_bn.append(nn.BatchNorm1d(out_channels))
 
         self.reset_parameters()
 
@@ -145,6 +151,7 @@ class GraphUNet(torch.nn.Module):
 
         x = self.down_convs[0](x, edge_index, edge_weight)
         x = self.act(x)
+        x = self.down_bn[0](x)
 
         xs = [x]
         edge_indices = [edge_index]
@@ -161,6 +168,7 @@ class GraphUNet(torch.nn.Module):
             x = x + t
             x = self.down_convs[i](x, edge_index, edge_weight)
             x = self.act(x)
+            x = self.down_bn[i](x)
 
             if i < self.depth:
                 xs += [x]
@@ -184,6 +192,7 @@ class GraphUNet(torch.nn.Module):
             x = x + t
             x = self.up_convs[i](x, edge_index, edge_weight)
             x = self.act(x) if i < self.depth - 1 else x
+            x = self.up_bn[i](x)
 
         return x
 

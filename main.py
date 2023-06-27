@@ -169,7 +169,6 @@ class Diffusion:
 
         # ensure one hot encoding for last timestep
         max_values, _ = torch.max(x_out[-1], dim=1, keepdim=True)
-        print(max_values.max(), max_values.min())
         x_out[-1] = torch.where(x_out[-1] == max_values, 1., -1.)
 
         return x_out
