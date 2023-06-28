@@ -37,11 +37,11 @@ class Diffusion:
         self.model = "GraphUNet"
 
         self.model_path = model_path
-        self.model_depth = 2
-        self.model_mult_factor = 2
+        self.model_depth = 1
         self.time_embedding_size = 32
 
         if self.model == "GDNN":
+            self.model_mult_factor = 2
             self.model = GDNN(self.num_node_features, self.time_embedding_size, self.model_depth,
                               self.model_mult_factor).to(self.device)
         elif self.model == "GraphUNet":
@@ -77,7 +77,6 @@ class Diffusion:
             config={
                 "learning_rate": self.learning_rate,
                 "model_depth": self.model_depth,
-                "model_mult_factor": self.model_mult_factor,
                 "time_embedding_size": self.time_embedding_size,
                 "batch_size": self.batch_size,
                 "epochs": self.epochs,
@@ -104,7 +103,7 @@ class Diffusion:
         return loss, smooth_l1_loss, mse_loss
 
     def train(self):
-        print((100 * '-') + '\n- Training model\n' + (100 * '-'))
+        print((100 * '-') + '\n' + (40 * '-') + 'Model Training'.center(20) + (40 * '-') + '\n' + (100 * '-'))
         self.model.train()
 
         for epoch in range(self.epochs):
@@ -207,6 +206,7 @@ class Diffusion:
 def main():
     data_path = "data/reveal/"
     model_path = f"models/model_{datetime.now().time()}.pth"
+    # model_path = 'models/model.pth'
     dataset = CPGDataset(data_path)
     diffusion = Diffusion(dataset, model_path)
 
