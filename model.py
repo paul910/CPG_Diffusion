@@ -81,9 +81,6 @@ class GraphUNet(torch.nn.Module):
             hidden_channels: int,
             out_channels: int,
             depth: int,
-            pool_ratios: Union[float, List[float]] = 0.5,
-            sum_res: bool = True,
-            act: Union[str, Callable] = 'relu',
     ):
         super().__init__()
         assert depth >= 1
@@ -91,54 +88,23 @@ class GraphUNet(torch.nn.Module):
         self.hidden_channels = hidden_channels
         self.out_channels = out_channels
         self.depth = depth
-        self.pool_ratios = repeat(pool_ratios, depth)
-        self.act = activation_resolver(act)
-        self.sum_res = sum_res
+        self.pool_ratios = 0.5
 
         self.time_emb_dim = 32
-
-        channels = hidden_channels
-
         self.time_mlp = nn.Sequential(
             SinusoidalPositionEmbeddings(self.time_emb_dim),
             nn.Linear(self.time_emb_dim, self.time_emb_dim),
             nn.ReLU()
         )
 
-        self.down_convs = torch.nn.ModuleList()
-        self.down_time = torch.nn.ModuleList()
-        self.down_bn = torch.nn.ModuleList()
-        self.pools = torch.nn.ModuleList()
-        self.down_convs.append(GCNConv(in_channels, channels, improved=True))
-        self.down_bn.append(nn.BatchNorm1d(channels))
+        self.downs = nn.ModuleList()
+        self.ups = nn.ModuleList()
+
+        self.conv_in = GCNConv(in_channels, hidden_channels, improved=True)
         for i in range(depth):
-            self.pools.append(TopKPooling(channels, self.pool_ratios[i]))
-            self.down_convs.append(GCNConv(channels, channels, improved=True))
-            self.down_time.append(nn.Linear(self.time_emb_dim, channels))
-            self.down_bn.append(nn.BatchNorm1d(channels))
-
-        in_channels = channels if sum_res else 2 * channels
-
-        self.up_convs = torch.nn.ModuleList()
-        self.up_time = torch.nn.ModuleList()
-        self.up_bn = torch.nn.ModuleList()
-        for i in range(depth - 1):
-            self.up_convs.append(GCNConv(in_channels, channels, improved=True))
-            self.up_time.append(nn.Linear(self.time_emb_dim, channels))
-            self.up_bn.append(nn.BatchNorm1d(channels))
-        self.up_convs.append(GCNConv(in_channels, out_channels, improved=True))
-        self.up_bn.append(nn.BatchNorm1d(out_channels))
-
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        r"""Resets all learnable parameters of the module."""
-        for conv in self.down_convs:
-            conv.reset_parameters()
-        for pool in self.pools:
-            pool.reset_parameters()
-        for conv in self.up_convs:
-            conv.reset_parameters()
+            self.downs.append(DownBlock(hidden_channels, self.time_emb_dim, self.pool_ratios))
+            self.ups.append(UpBlock(hidden_channels, self.time_emb_dim, self.pool_ratios))
+        self.conv_out = GCNConv(hidden_channels, out_channels, improved=True)
 
     def forward(self, x: Tensor, edge_index: Tensor, timestep: Tensor,
                 batch: OptTensor = None) -> Tensor:
@@ -149,28 +115,17 @@ class GraphUNet(torch.nn.Module):
             batch = edge_index.new_zeros(x.size(0))
         edge_weight = x.new_ones(edge_index.size(1))
 
-        x = self.down_convs[0](x, edge_index, edge_weight)
-        x = self.act(x)
-        x = self.down_bn[0](x)
+        x = self.conv_in(x, edge_index, edge_weight)
 
         xs = [x]
         edge_indices = [edge_index]
         edge_weights = [edge_weight]
         perms = []
 
-        for i in range(1, self.depth + 1):
-            edge_index, edge_weight = self.augment_adj(edge_index, edge_weight,
-                                                       x.size(0))
-            x, edge_index, edge_weight, batch, perm, _ = self.pools[i - 1](
-                x, edge_index, edge_weight, batch)
+        for i in range(self.depth):
+            x, edge_index, edge_weight, batch, perm = self.downs[i](x, edge_index, edge_weight, batch, t_mlp)
 
-            t = self.act(self.down_time[i - 1](t_mlp))
-            x = x + t
-            x = self.down_convs[i](x, edge_index, edge_weight)
-            x = self.act(x)
-            x = self.down_bn[i](x)
-
-            if i < self.depth:
+            if (i + 1) < self.depth:
                 xs += [x]
                 edge_indices += [edge_index]
                 edge_weights += [edge_weight]
@@ -186,15 +141,34 @@ class GraphUNet(torch.nn.Module):
 
             up = torch.zeros_like(res)
             up[perm] = x
-            x = res + up if self.sum_res else torch.cat((res, up), dim=-1)
-
-            t = self.act(self.down_time[i](t_mlp))
-            x = x + t
-            x = self.up_convs[i](x, edge_index, edge_weight)
-            x = self.act(x) if i < self.depth - 1 else x
-            x = self.up_bn[i](x)
+            x = res + up
+            if i < self.depth - 1:
+                x = self.ups[i](x, edge_index, edge_weight, t_mlp)
+            else:
+                x = self.conv_out(x, edge_index, edge_weight)
 
         return x
+
+
+class DownBlock(torch.nn.Module):
+    def __init__(self, channels, time_emb_dim, pool_ratio):
+        super().__init__()
+        self.act = nn.ReLU()
+        self.pool = TopKPooling(channels, pool_ratio)
+        self.conv = GCNConv(channels, channels, improved=True)
+        self.time = nn.Linear(time_emb_dim, channels)
+        self.bn = nn.BatchNorm1d(channels)
+
+    def forward(self, x, edge_index, edge_weight, batch, t):
+        edge_index, edge_weight = self.augment_adj(edge_index, edge_weight,
+                                                   x.size(0))
+        x, edge_index, edge_weight, batch, perm, _ = self.pool(
+            x, edge_index, edge_weight, batch)
+
+        t = self.act(self.time(t))
+        x = x + t
+        x = self.bn(self.act(self.conv(x, edge_index, edge_weight)))
+        return x, edge_index, edge_weight, batch, perm
 
     def augment_adj(self, edge_index: Tensor, edge_weight: Tensor,
                     num_nodes: int) -> PairTensor:
@@ -203,16 +177,29 @@ class GraphUNet(torch.nn.Module):
                                                  num_nodes=num_nodes)
         adj = to_torch_csr_tensor(edge_index, edge_weight,
                                   size=(num_nodes, num_nodes))
-        #adj = adj.to_dense()  # TODO: remove on AWS
+        # adj = adj.to_dense()  # TODO: remove on AWS
         adj = (adj @ adj).to_sparse_coo()
         edge_index, edge_weight = adj.indices(), adj.values()
         edge_index, edge_weight = remove_self_loops(edge_index, edge_weight)
         return edge_index, edge_weight
 
-    def __repr__(self) -> str:
-        return (f'{self.__class__.__name__}({self.in_channels}, '
-                f'{self.hidden_channels}, {self.out_channels}, '
-                f'depth={self.depth}, pool_ratios={self.pool_ratios})')
+
+class UpBlock(torch.nn.Module):
+    def __init__(self, channels, time_emb_dim, pool_ratio):
+        super().__init__()
+        self.act = nn.ReLU()
+        self.conv = GCNConv(channels, channels, improved=True)
+        self.pool = TopKPooling(channels, pool_ratio)
+        self.time = nn.Linear(time_emb_dim, channels)
+        self.bn = nn.BatchNorm1d(channels)
+
+    def forward(self, x, edge_index, edge_weight, t):
+
+        t = self.act(self.time(t))
+        x = x + t
+        x = self.bn(self.act(self.conv(x, edge_index, edge_weight)))
+        return x
+
 
 
 class SinusoidalPositionEmbeddings(nn.Module):

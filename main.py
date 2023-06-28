@@ -37,7 +37,7 @@ class Diffusion:
         self.model = "GraphUNet"
 
         self.model_path = model_path
-        self.model_depth = 1
+        self.model_depth = 2
         self.time_embedding_size = 32
 
         if self.model == "GDNN":
