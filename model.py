@@ -154,20 +154,23 @@ class DownBlock(torch.nn.Module):
     def __init__(self, channels, time_emb_dim, pool_ratio):
         super().__init__()
         self.act = nn.ReLU()
-        self.pool = TopKPooling(channels, pool_ratio)
-        self.conv = GCNConv(channels, channels, improved=True)
-        self.time = nn.Linear(time_emb_dim, channels)
-        self.bn = nn.BatchNorm1d(channels)
 
+        self.conv1 = GCNConv(channels, channels, improved=True)
+        self.bn1 = nn.BatchNorm1d(channels)
+        self.conv2 = GCNConv(channels, channels, improved=True)
+        self.bn2 = nn.BatchNorm1d(channels)
+
+        self.pool = TopKPooling(channels, pool_ratio)
+        self.time = nn.Linear(time_emb_dim, channels)
     def forward(self, x, edge_index, edge_weight, batch, t):
         edge_index, edge_weight = self.augment_adj(edge_index, edge_weight,
                                                    x.size(0))
         x, edge_index, edge_weight, batch, perm, _ = self.pool(
             x, edge_index, edge_weight, batch)
 
-        t = self.act(self.time(t))
-        x = x + t
-        x = self.bn(self.act(self.conv(x, edge_index, edge_weight)))
+        x = self.bn1(self.act(self.conv1(x, edge_index, edge_weight)))
+        x = x + self.act(self.time(t))
+        x = self.bn2(self.act(self.conv2(x, edge_index, edge_weight)))
         return x, edge_index, edge_weight, batch, perm
 
     def augment_adj(self, edge_index: Tensor, edge_weight: Tensor,
@@ -188,16 +191,19 @@ class UpBlock(torch.nn.Module):
     def __init__(self, channels, time_emb_dim, pool_ratio):
         super().__init__()
         self.act = nn.ReLU()
-        self.conv = GCNConv(channels, channels, improved=True)
+
+        self.conv1 = GCNConv(channels, channels, improved=True)
+        self.bn1 = nn.BatchNorm1d(channels)
+        self.conv2 = GCNConv(channels, channels, improved=True)
+        self.bn2 = nn.BatchNorm1d(channels)
+
         self.pool = TopKPooling(channels, pool_ratio)
         self.time = nn.Linear(time_emb_dim, channels)
-        self.bn = nn.BatchNorm1d(channels)
 
     def forward(self, x, edge_index, edge_weight, t):
-
-        t = self.act(self.time(t))
-        x = x + t
-        x = self.bn(self.act(self.conv(x, edge_index, edge_weight)))
+        x = self.bn1(self.act(self.conv1(x, edge_index, edge_weight)))
+        x = x + self.act(self.time(t))
+        x = self.bn2(self.act(self.conv2(x, edge_index, edge_weight)))
         return x
 
 
