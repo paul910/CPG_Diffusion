@@ -1,18 +1,15 @@
 import math
-from typing import Callable, List, Union
 
 import torch
 from torch import Tensor
 from torch import nn
 from torch_geometric.nn import GCNConv, TopKPooling
-from torch_geometric.nn.resolver import activation_resolver
 from torch_geometric.typing import OptTensor, PairTensor
 from torch_geometric.utils import (
     add_self_loops,
     remove_self_loops,
     to_torch_csr_tensor,
 )
-from torch_geometric.utils.repeat import repeat
 
 
 class GDNN(nn.Module):
@@ -162,6 +159,7 @@ class DownBlock(torch.nn.Module):
 
         self.pool = TopKPooling(channels, pool_ratio)
         self.time = nn.Linear(time_emb_dim, channels)
+
     def forward(self, x, edge_index, edge_weight, batch, t):
         edge_index, edge_weight = self.augment_adj(edge_index, edge_weight,
                                                    x.size(0))
@@ -205,7 +203,6 @@ class UpBlock(torch.nn.Module):
         x = x + self.act(self.time(t))
         x = self.bn2(self.act(self.conv2(x, edge_index, edge_weight)))
         return x
-
 
 
 class SinusoidalPositionEmbeddings(nn.Module):

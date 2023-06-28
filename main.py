@@ -24,7 +24,7 @@ class Diffusion:
 
         self.batch_size = 1
         self.epochs = 1000
-        self.learning_rate = 0.00001
+        self.learning_rate = 0.0001
         self.weight_decay = 0.0001
 
         self.dataset = dataset
@@ -132,8 +132,34 @@ class Diffusion:
             if self.model_path is not None:
                 self.save_model()
 
+            self.validate()
+
             out = self.sample()
             torch.save(out, f"out_{epoch}.pt")
+
+    def validate(self):
+        self.model.eval()
+        total_loss = 0
+        total_smooth_l1_loss = 0
+        total_mse_loss = 0
+        with torch.no_grad():
+            for graph in tqdm(self.test_loader, total=len(self.test_loader), desc="Validating"):
+                x = (graph.x[:, :50] - 0.5 if self.first_features else graph.x[:, 50:]) * 2
+                t = torch.randint(0, self.T, (1,), device=self.device).long()
+                x_t, x_noise = self.forward_diffusion_sample(x, t)
+                x_noise_pred = self.model(x_t, graph.edge_index.to(self.device), t)
+                loss, smooth_l1_loss, mse_loss = self.calculate_loss(x_noise_pred.to(self.device),
+                                                                     x_noise.to(self.device))
+                total_loss += loss.item()
+                total_smooth_l1_loss += smooth_l1_loss.item()
+                total_mse_loss += mse_loss.item()
+        mean_loss = total_loss / len(self.test_loader)
+        mean_smooth_l1_loss = total_smooth_l1_loss / len(self.test_loader)
+        mean_mse_loss = total_mse_loss / len(self.test_loader)
+        if self.log_wandb:
+            self.wandb.log(
+                {"val_loss": mean_loss, "val_smooth_l1_loss": mean_smooth_l1_loss, "val_mse_loss": mean_mse_loss})
+        self.model.train()
 
     @torch.no_grad()
     def sample_timestep(self, x, edge_index, t):
