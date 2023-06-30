@@ -11,6 +11,8 @@ from torch_geometric.utils import (
     to_torch_csr_tensor,
 )
 
+torch.autograd.set_detect_anomaly(True)
+
 
 class GDNN(nn.Module):
     def __init__(self, in_channels: int, time_emb_dim: int, model_depth: int = 2, model_mult_factor: int = 3):

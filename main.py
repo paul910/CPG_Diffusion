@@ -102,6 +102,13 @@ class Diffusion:
 
         return loss, smooth_l1_loss, mse_loss
 
+    def loss(self, graph):
+        x = (graph.x[:, :50] - 0.5 if self.first_features else graph.x[:, 50:]) * 2
+        t = torch.randint(0, self.T, (1,), device=self.device).long()
+        x_t, x_noise = self.forward_diffusion_sample(x, t)
+        x_noise_pred = self.model(x_t, graph.edge_index.to(self.device), t)
+        return self.calculate_loss(x_noise_pred.to(self.device), x_noise.to(self.device))
+
     def train(self):
         print((100 * '-') + '\n' + (40 * '-') + 'Model Training'.center(20) + (40 * '-') + '\n' + (100 * '-'))
         self.model.train()
@@ -111,16 +118,7 @@ class Diffusion:
             for step, graph in enumerate(tqdm(self.train_loader, total=len(self.train_loader), desc="Training")):
                 self.optimizer.zero_grad()
 
-                x = (graph.x[:, :50] - 0.5 if self.first_features else graph.x[:, 50:]) * 2
-
-                t = torch.randint(0, self.T, (1,), device=self.device).long()
-
-                x_t, x_noise = self.forward_diffusion_sample(x, t)
-
-                x_noise_pred = self.model(x_t, graph.edge_index.to(self.device), t)
-
-                loss, smooth_l1_loss, mse_loss = self.calculate_loss(x_noise_pred.to(self.device),
-                                                                     x_noise.to(self.device))
+                loss, smooth_l1_loss, mse_loss = self.loss(graph)
 
                 loss.backward()
                 self.optimizer.step()
@@ -144,15 +142,12 @@ class Diffusion:
         total_mse_loss = 0
         with torch.no_grad():
             for graph in tqdm(self.test_loader, total=len(self.test_loader), desc="Validating"):
-                x = (graph.x[:, :50] - 0.5 if self.first_features else graph.x[:, 50:]) * 2
-                t = torch.randint(0, self.T, (1,), device=self.device).long()
-                x_t, x_noise = self.forward_diffusion_sample(x, t)
-                x_noise_pred = self.model(x_t, graph.edge_index.to(self.device), t)
-                loss, smooth_l1_loss, mse_loss = self.calculate_loss(x_noise_pred.to(self.device),
-                                                                     x_noise.to(self.device))
+                loss, smooth_l1_loss, mse_loss = self.loss(graph)
+
                 total_loss += loss.item()
                 total_smooth_l1_loss += smooth_l1_loss.item()
                 total_mse_loss += mse_loss.item()
+
         mean_loss = total_loss / len(self.test_loader)
         mean_smooth_l1_loss = total_smooth_l1_loss / len(self.test_loader)
         mean_mse_loss = total_mse_loss / len(self.test_loader)
