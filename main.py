@@ -50,7 +50,7 @@ class Diffusion:
         if os.path.exists(self.model_path):
             self.model.load_state_dict(torch.load(self.model_path, map_location=self.device))
 
-        self.optimizer = Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        self.optimizer = Adam(self.model.parameters(), lr=self.learning_rate)
 
         self.T = 1000
         self.betas = geometric_beta_schedule(timesteps=self.T)
