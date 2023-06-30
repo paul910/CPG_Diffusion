@@ -141,10 +141,9 @@ class GraphUNet(torch.nn.Module):
             up = torch.zeros_like(res)
             up[perm] = x
             x = res + up
-            if i < self.depth - 1:
-                x = self.ups[i](x, edge_index, edge_weight, t_mlp)
-            else:
-                x = self.conv_out(x, edge_index, edge_weight)
+            x = self.ups[i](x, edge_index, edge_weight, t_mlp)
+
+        x = self.conv_out(x, edge_index, edge_weight)
 
         return x
 
