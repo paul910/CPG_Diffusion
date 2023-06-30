@@ -37,14 +37,14 @@ class Diffusion:
 
         self.model_path = model_path
         self.model_depth = 3
-        self.model_mult_factor = 2
         self.time_embedding_size = 32
 
         if self.model == "GDNN":
+            self.model_mult_factor = 2
             self.model = GDNN(self.num_node_features, self.time_embedding_size, self.model_depth,
                               self.model_mult_factor).to(self.device)
         elif self.model == "GraphUNet":
-            self.model = GraphUNet(self.num_node_features, self.model_mult_factor, self.model_depth).to(
+            self.model = GraphUNet(self.num_node_features, 128, self.num_node_features, self.model_depth).to(
                 self.device)
 
         if os.path.exists(self.model_path):
