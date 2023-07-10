@@ -105,13 +105,10 @@ class GraphUNet(torch.nn.Module):
             self.ups.append(UpBlock(hidden_channels, self.time_emb_dim))
         self.conv_out = GCNConv(hidden_channels, out_channels, improved=True)
 
-    def forward(self, x: Tensor, edge_index: Tensor, timestep: Tensor,
-                batch: OptTensor = None) -> Tensor:
+    def forward(self, x: Tensor, edge_index: Tensor, timestep: Tensor) -> Tensor:
         """"""
         t_mlp = self.time_mlp(timestep)
 
-        if batch is None:
-            batch = edge_index.new_zeros(x.size(0))
         edge_weight = x.new_ones(edge_index.size(1))
 
         x = self.conv_in(x, edge_index, edge_weight)
@@ -122,7 +119,7 @@ class GraphUNet(torch.nn.Module):
         perms = []
 
         for i in range(self.depth):
-            x, edge_index, edge_weight, batch, perm = self.downs[i](x, edge_index, edge_weight, batch, t_mlp)
+            x, edge_index, edge_weight, perm = self.downs[i](x, edge_index, edge_weight, t_mlp)
 
             if (i + 1) < self.depth:
                 xs += [x]
@@ -154,23 +151,23 @@ class DownBlock(torch.nn.Module):
         self.act = nn.ReLU()
 
         self.conv1 = GCNConv(channels, channels, improved=True)
-        self.bn1 = nn.BatchNorm1d(channels)
+        self.n1 = nn.LayerNorm(channels)
         self.conv2 = GCNConv(channels, channels, improved=True)
-        self.bn2 = nn.BatchNorm1d(channels)
+        self.n2 = nn.LayerNorm(channels)
 
         self.pool = TopKPooling(channels, pool_ratio)
         self.time = nn.Linear(time_emb_dim, channels)
 
-    def forward(self, x, edge_index, edge_weight, batch, t):
+    def forward(self, x, edge_index, edge_weight, t):
         edge_index, edge_weight = self.augment_adj(edge_index, edge_weight,
                                                    x.size(0))
-        x, edge_index, edge_weight, batch, perm, _ = self.pool(
-            x, edge_index, edge_weight, batch)
+        x, edge_index, edge_weight, _, perm, _ = self.pool(
+            x, edge_index, edge_weight)
 
-        x = self.bn1(self.act(self.conv1(x, edge_index, edge_weight)))
+        x = self.n1(self.act(self.conv1(x, edge_index, edge_weight)))
         x = x + self.act(self.time(t))
-        x = self.bn2(self.act(self.conv2(x, edge_index, edge_weight)))
-        return x, edge_index, edge_weight, batch, perm
+        x = self.n2(self.act(self.conv2(x, edge_index, edge_weight)))
+        return x, edge_index, edge_weight, perm
 
     def augment_adj(self, edge_index: Tensor, edge_weight: Tensor,
                     num_nodes: int) -> PairTensor:
@@ -192,16 +189,16 @@ class UpBlock(torch.nn.Module):
         self.act = nn.ReLU()
 
         self.conv1 = GCNConv(channels, channels, improved=True)
-        self.bn1 = nn.BatchNorm1d(channels)
+        self.n1 = nn.LayerNorm(channels)
         self.conv2 = GCNConv(channels, channels, improved=True)
-        self.bn2 = nn.BatchNorm1d(channels)
+        self.n2 = nn.LayerNorm(channels)
 
         self.time = nn.Linear(time_emb_dim, channels)
 
     def forward(self, x, edge_index, edge_weight, t):
-        x = self.bn1(self.act(self.conv1(x, edge_index, edge_weight)))
+        x = self.n1(self.act(self.conv1(x, edge_index, edge_weight)))
         x = x + self.act(self.time(t))
-        x = self.bn2(self.act(self.conv2(x, edge_index, edge_weight)))
+        x = self.n2(self.act(self.conv2(x, edge_index, edge_weight)))
         return x
 
 
