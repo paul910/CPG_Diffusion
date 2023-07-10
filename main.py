@@ -15,14 +15,13 @@ from tqdm import tqdm
 import wandb
 from dataset import CPGDataset
 from model import GDNN, GraphUNet
-from utils import geometric_beta_schedule, get_index_from_list, plot, to_adj
+from utils import geometric_beta_schedule, get_index_from_list, to_adj, plot_array
 
 
 class Diffusion:
     def __init__(self, dataset: Dataset, model_path=None, ):
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-        self.batch_size = 1
         self.epochs = 1000
         self.learning_rate = 0.001
 
@@ -30,8 +29,8 @@ class Diffusion:
         self.first_features = True
         self.num_node_features = 50 if self.first_features else 128
         self.train_dataset, self.test_dataset = self.dataset.train_test_split()
-        self.train_loader = DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True)
-        self.test_loader = DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False)
+        self.train_loader = DataLoader(self.train_dataset, shuffle=True)
+        self.test_loader = DataLoader(self.test_dataset, shuffle=False)
 
         self.model = "GraphUNet"
 
@@ -77,7 +76,6 @@ class Diffusion:
                 "learning_rate": self.learning_rate,
                 "model_depth": self.model_depth,
                 "time_embedding_size": self.time_embedding_size,
-                "batch_size": self.batch_size,
                 "epochs": self.epochs,
             }
         )
@@ -178,7 +176,7 @@ class Diffusion:
     def sample(self):
         self.model.eval()
 
-        edge_index = self.test_loader.dataset[0].edge_index.to(self.device)
+        edge_index = self.test_loader.dataset[5].edge_index.to(self.device)
         x = torch.randn(to_adj(edge_index).shape[0], self.num_node_features).to(self.device)
 
         x_out = []
@@ -195,16 +193,18 @@ class Diffusion:
 
         return x_out
 
-    def show_sample(self, num_show=10, pre_processed=None):
+    def show_sample(self, num_show=5, pre_processed=None):
         print("Showing samples")
 
         x = self.sample() if pre_processed is None else pre_processed
 
+        out = []
         for step, i in enumerate(x):
-            if step % (self.T / num_show) == 0:
-                plot(i, "Features", "Nodes", f"Step {step}")
+            if step % (self.T / (num_show - 1)) == 0:
+                out.append(i)
 
-        plot(x[-1], "out")
+        out.append(x[-1])
+        plot_array(out, "Features", "Nodes", "Sample")
 
     def show_forward_diff(self):
         print("Showing forward diffusion")
@@ -212,11 +212,14 @@ class Diffusion:
         for graph in self.train_loader:
             x = (graph.x[:, :50] - 0.5 if self.first_features else graph.x[:, 50:]) * 2
 
-            for step, t in enumerate(range(0, self.T, 100)):
+            out = []
+            for step, t in enumerate(range(0, self.T, 200)):
                 t = torch.full((1,), t, dtype=torch.long, device=self.device)
                 x, noise = self.forward_diffusion_sample(x, t)
                 x = x.clamp(-1, 1)
-                plot(x, "Features", "Nodes", f"Step {step}")
+                out.append(x)
+
+            plot_array(out, "Features", "Nodes", "Forward Diffusion")
             break
 
     def save_model(self):

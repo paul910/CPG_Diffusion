@@ -4,7 +4,7 @@ import torch
 from torch import Tensor
 from torch import nn
 from torch_geometric.nn import GCNConv, TopKPooling
-from torch_geometric.typing import OptTensor, PairTensor
+from torch_geometric.typing import PairTensor
 from torch_geometric.utils import (
     add_self_loops,
     remove_self_loops,
@@ -25,8 +25,8 @@ class GDNN(nn.Module):
         self.relu = nn.ReLU()
         self.softmax = nn.Softmax(dim=1)
 
-        self.bn_in = nn.BatchNorm1d(in_channels * self.mult_factor)
-        self.bn_out = nn.BatchNorm1d(in_channels)
+        self.bn_in = nn.LayerNorm(in_channels * self.mult_factor)
+        self.bn_out = nn.LayerNorm(in_channels)
 
         self.conv_x_in = GCNConv(in_channels, in_channels * self.mult_factor)
 
@@ -62,8 +62,8 @@ class Block(nn.Module):
         self.time_mlp = nn.Linear(time_emb_dim, out_ch)
         self.conv1 = GCNConv(in_ch, out_ch)
         self.conv2 = GCNConv(out_ch, out_ch)
-        self.bn1 = nn.BatchNorm1d(out_ch)
-        self.bn2 = nn.BatchNorm1d(out_ch)
+        self.bn1 = nn.LayerNorm(out_ch)
+        self.bn2 = nn.LayerNorm(out_ch)
         self.relu = nn.ReLU()
 
     def forward(self, x, edge_index, t):
