@@ -102,7 +102,7 @@ class GraphUNet(torch.nn.Module):
         self.conv_in = GCNConv(in_channels, hidden_channels, improved=True)
         for i in range(depth):
             self.downs.append(DownBlock(hidden_channels, self.time_emb_dim, self.pool_ratios))
-            self.ups.append(UpBlock(hidden_channels, self.time_emb_dim, self.pool_ratios))
+            self.ups.append(UpBlock(hidden_channels, self.time_emb_dim))
         self.conv_out = GCNConv(hidden_channels, out_channels, improved=True)
 
     def forward(self, x: Tensor, edge_index: Tensor, timestep: Tensor,
@@ -179,7 +179,7 @@ class DownBlock(torch.nn.Module):
                                                  num_nodes=num_nodes)
         adj = to_torch_csr_tensor(edge_index, edge_weight,
                                   size=(num_nodes, num_nodes))
-        # adj = adj.to_dense()  # TODO: remove on AWS
+        adj = adj.to_dense()  # TODO: remove on AWS
         adj = (adj @ adj).to_sparse_coo()
         edge_index, edge_weight = adj.indices(), adj.values()
         edge_index, edge_weight = remove_self_loops(edge_index, edge_weight)
@@ -187,7 +187,7 @@ class DownBlock(torch.nn.Module):
 
 
 class UpBlock(torch.nn.Module):
-    def __init__(self, channels, time_emb_dim, pool_ratio):
+    def __init__(self, channels, time_emb_dim):
         super().__init__()
         self.act = nn.ReLU()
 
@@ -196,7 +196,6 @@ class UpBlock(torch.nn.Module):
         self.conv2 = GCNConv(channels, channels, improved=True)
         self.bn2 = nn.BatchNorm1d(channels)
 
-        self.pool = TopKPooling(channels, pool_ratio)
         self.time = nn.Linear(time_emb_dim, channels)
 
     def forward(self, x, edge_index, edge_weight, t):

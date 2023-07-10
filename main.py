@@ -202,7 +202,7 @@ class Diffusion:
 
         for step, i in enumerate(x):
             if step % (self.T / num_show) == 0:
-                plot(i)
+                plot(i, "Features", "Nodes", f"Step {step}")
 
         plot(x[-1], "out")
 
