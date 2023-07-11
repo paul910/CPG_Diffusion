@@ -159,8 +159,7 @@ class DownBlock(torch.nn.Module):
         self.time = nn.Linear(time_emb_dim, channels)
 
     def forward(self, x, edge_index, edge_weight, t):
-        edge_index, edge_weight = self.augment_adj(edge_index, edge_weight,
-                                                   x.size(0))
+        edge_index, edge_weight = self.augment_adj(edge_index, edge_weight, x.size(0))
         x, edge_index, edge_weight, _, perm, _ = self.pool(
             x, edge_index, edge_weight)
 
@@ -172,10 +171,8 @@ class DownBlock(torch.nn.Module):
     def augment_adj(self, edge_index: Tensor, edge_weight: Tensor,
                     num_nodes: int) -> PairTensor:
         edge_index, edge_weight = remove_self_loops(edge_index, edge_weight)
-        edge_index, edge_weight = add_self_loops(edge_index, edge_weight,
-                                                 num_nodes=num_nodes)
-        adj = to_torch_csr_tensor(edge_index, edge_weight,
-                                  size=(num_nodes, num_nodes))
+        edge_index, edge_weight = add_self_loops(edge_index, edge_weight, num_nodes=num_nodes)
+        adj = to_torch_csr_tensor(edge_index, edge_weight, size=(num_nodes, num_nodes))
         # adj = adj.to_dense()  # TODO: remove on AWS
         adj = (adj @ adj).to_sparse_coo()
         edge_index, edge_weight = adj.indices(), adj.values()
