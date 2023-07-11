@@ -35,7 +35,7 @@ class Diffusion:
         self.model_path = model_path
         self.model_depth = 3
         self.time_embedding_size = 32
-        self.model = GraphUNet(self.num_node_features, 128, self.num_node_features, self.model_depth).to(self.device)
+        self.model = GraphUNet(self.num_node_features, 256, self.num_node_features, self.model_depth).to(self.device)
 
         if os.path.exists(self.model_path):
             self.model.load_state_dict(torch.load(self.model_path, map_location=self.device))
