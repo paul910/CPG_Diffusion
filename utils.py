@@ -55,13 +55,11 @@ def plot(value, x_axis=None, yaxis=None, title=None):
 
 
 def plot_array(values, x_axis=None, yaxis=None, title=None):
-    ncols = len(values)  # Number of columns equals the number of values
-    nrows = 1  # Only one row
+    ncols = len(values)
+    nrows = 1
 
-    # Adjust figure size according to the aspect ratio of the images
-    aspect_ratio = values[0].shape[1] / values[0].shape[0]  # Assuming all images have the same shape
-    fig, axes = plt.subplots(nrows, ncols,
-                             figsize=(10 * ncols * aspect_ratio, 10))  # Adjust figure width according to aspect ratio
+    aspect_ratio = values[0].shape[1] / values[0].shape[0]
+    fig, axes = plt.subplots(nrows, ncols, figsize=(10 * ncols * aspect_ratio, 10))
 
     # Identify global min and max
     global_min = np.inf

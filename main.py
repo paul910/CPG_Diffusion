@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 import wandb
 from dataset import CPGDataset
-from model import GDNN, GraphUNet
+from model import GraphUNet
 from utils import geometric_beta_schedule, get_index_from_list, to_adj, plot_array
 
 
@@ -27,24 +27,15 @@ class Diffusion:
 
         self.dataset = dataset
         self.first_features = True
-        self.num_node_features = 50 if self.first_features else 128
+        self.num_node_features = 178
         self.train_dataset, self.test_dataset = self.dataset.train_test_split()
         self.train_loader = DataLoader(self.train_dataset, shuffle=True)
         self.test_loader = DataLoader(self.test_dataset, shuffle=False)
 
-        self.model = "GraphUNet"
-
         self.model_path = model_path
         self.model_depth = 3
         self.time_embedding_size = 32
-
-        if self.model == "GDNN":
-            self.model_mult_factor = 2
-            self.model = GDNN(self.num_node_features, self.time_embedding_size, self.model_depth,
-                              self.model_mult_factor).to(self.device)
-        elif self.model == "GraphUNet":
-            self.model = GraphUNet(self.num_node_features, 128, self.num_node_features, self.model_depth).to(
-                self.device)
+        self.model = GraphUNet(self.num_node_features, 128, self.num_node_features, self.model_depth).to(self.device)
 
         if os.path.exists(self.model_path):
             self.model.load_state_dict(torch.load(self.model_path, map_location=self.device))
@@ -69,7 +60,7 @@ class Diffusion:
     def config_wandb(self):
         self.wandb.init(
             # set the wandb project where this run will be logged
-            project=f"CPG_Diffusion_{self.model.__class__.__name__}",
+            project=f"CPG_Diffusion_All_{self.model.__class__.__name__}",
 
             # track hyperparameters and run metadata
             config={
@@ -100,7 +91,11 @@ class Diffusion:
         return loss, smooth_l1_loss, mse_loss
 
     def loss(self, graph):
-        x = (graph.x[:, :50] - 0.5 if self.first_features else graph.x[:, 50:]) * 2
+        x_first_50 = (graph.x[:, :50] - 0.5) * 2
+        x_last_50 = graph.x[:, 50:] * 2
+
+        x = torch.cat((x_first_50, x_last_50), dim=1)
+
         t = torch.randint(0, self.T, (1,), device=self.device).long()
         x_t, x_noise = self.forward_diffusion_sample(x, t)
         x_noise_pred = self.model(x_t, graph.edge_index.to(self.device), t)
@@ -184,12 +179,13 @@ class Diffusion:
         for i in tqdm(reversed(range(self.T)), total=self.T, desc='Sampling'):
             t = torch.full((1,), i, dtype=torch.long, device=self.device)
             x = self.sample_timestep(x, edge_index, t)
-            x = x.clamp(-1, 1)
+            if i != 0:
+                x = x.clamp(-1, 1)
             x_out.append(x)
 
-        # ensure one hot encoding for last timestep
-        max_values, _ = torch.max(x_out[-1], dim=1, keepdim=True)
-        x_out[-1] = torch.where(x_out[-1] == max_values, 1., -1.)
+        # ensure one hot encoding for first 50 features in last timestep
+        max_values, _ = torch.max(x_out[-1][:, :50], dim=1, keepdim=True)
+        x_out[-1][:, :50] = torch.where(x_out[-1][:, :50] == max_values, torch.tensor(1.), torch.tensor(-1.))
 
         return x_out
 
@@ -210,7 +206,10 @@ class Diffusion:
         print("Showing forward diffusion")
 
         for graph in self.train_loader:
-            x = (graph.x[:, :50] - 0.5 if self.first_features else graph.x[:, 50:]) * 2
+            x_first_50 = (graph.x[:, :50] - 0.5) * 2
+            x_last_50 = graph.x[:, 50:] * 2
+
+            x = torch.cat((x_first_50, x_last_50), dim=1)
 
             out = []
             for step, t in enumerate(range(0, self.T, 200)):
