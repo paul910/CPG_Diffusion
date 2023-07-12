@@ -23,6 +23,11 @@ Move to the cloned repository's directory:
 cd CPG_Diffusion
 ```
 
+### *Optional* Step 2.5: Create a Virtual Environment
+
+It is recommended but not necessary to create a virtual environment for this project. Use conda, venv, or any other virtual environment manager of your choice.
+And execute the following steps in your virtual environment:
+
 ### Step 3: Install the required packages
 
 The project should contain a ```requirements.txt``` file with a list of all the necessary Python packages. You can install these using pip by running:
@@ -37,7 +42,7 @@ Open ```config.ini``` in a text editor of your choice, and set your config varia
 
 ### Step 5: Download Data
 
-Currently, Data only available on the AWS-Machine:
+Currently, data only available on the AWS-Machine:
 
 If NFS is not installed on your machine, install it by typing the following command in your terminal:
 ```bash
@@ -52,12 +57,14 @@ sudo mkdir <repository-path>/data
 sudo cp -RT /mnt/efs/Paul/data/processed <repository-path>/data/reveal
 ```
 
+__Attention!__: Copying the data from the EFS file system to your machine may take a while as the dataset contains over 19.000 graphs.
+
 ### Final Step: Run the Project
 
 You can run the project by typing the following command in your terminal:
 
 ```bash
-python main.py
+python3 main.py
 ```
 
 #### Mode: train
