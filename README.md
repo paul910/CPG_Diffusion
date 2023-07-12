@@ -2,7 +2,11 @@
  
 ## Setup
 
-This guide will walk you through the process of setting up this project, installing required packages using pip, setting up config variables in a .ini file, and downloading data into a specific directory. Please follow the steps below:
+This guide will walk you through the process of setting up this project, installing required packages using pip, setting up config variables in a .ini file, and downloading data into a specific directory. Please follow the steps below.
+
+The best way is to use AWS-Machine with AMI (Deep Learning AMI GPU PyTorch 2.0.1 (Ubuntu 20.04)) on AWS EC2 instance (g4dn.xlarge) with 64 GB EBS storage. The following steps are based on this setup.
+If you are using a different setup, you may need to adjust the commands accordingly. 
+
 
 ### Step 1: Clone the repository
 First, you need to clone the GitHub repository to your local machine. Open your terminal and type:
@@ -46,14 +50,6 @@ sudo mkdir /mnt/efs
 sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport fs-9b946fe0.efs.us-east-2.amazonaws.com:/ /mnt/efs
 sudo mkdir <repository-path>/data
 sudo cp -RT /mnt/efs/Paul/data/processed <repository-path>/data/reveal
-```
-
-### Final Step: Run the Project
-
-You can run the project by typing the following command in your terminal:
-
-```bash
-python main.py
 ```
 
 ### Final Step: Run the Project
