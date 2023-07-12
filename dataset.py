@@ -4,6 +4,8 @@ import torch
 from torch.utils.data import random_split
 from torch_geometric.data import Dataset
 
+from utils import console_log
+
 
 class CPGDataset(Dataset):
     """
@@ -21,6 +23,7 @@ class CPGDataset(Dataset):
             node_features (int, optional): The number of node features in each graph. Defaults to 178.
             classes (int, optional): The number of unique classes in the dataset. Defaults to 2.
         """
+        console_log('Setting up dataset')
         self.folder_path = path_to_data_folder
         self.files = self.get_file_list()
         self.node_features = node_features

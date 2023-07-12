@@ -114,7 +114,7 @@ class DownBlock(torch.nn.Module):
         edge_index, edge_weight = remove_self_loops(edge_index, edge_weight)
         edge_index, edge_weight = add_self_loops(edge_index, edge_weight, num_nodes=num_nodes)
         adj = to_torch_csr_tensor(edge_index, edge_weight, size=(num_nodes, num_nodes))
-        # adj = adj.to_dense()  # TODO: remove on AWS
+        adj = adj.to_dense()  # TODO: remove on AWS
         adj = (adj @ adj).to_sparse_coo()
         edge_index, edge_weight = adj.indices(), adj.values()
         edge_index, edge_weight = remove_self_loops(edge_index, edge_weight)
