@@ -32,11 +32,13 @@ class Diffusion:
         self.train_loader = DataLoader(self.train_dataset, shuffle=True)
         self.test_loader = DataLoader(self.test_dataset, shuffle=False)
 
-        self.model_path = config.get('MODEL', 'model_path')
         self.model_depth = config.getint('MODEL', 'model_depth')
+        self.hidden_size = config.getint('MODEL', 'hidden_size')
         self.time_embedding_size = config.getint('MODEL', 'time_embedding_size')
-        self.model = GraphUNet(self.num_node_features, config.getint('MODEL', 'hidden_size'), self.num_node_features,
+        self.model = GraphUNet(self.num_node_features, self.hidden_size , self.num_node_features,
                                self.model_depth).to(self.device)
+
+        self.model_path = "models/model_depth" + self.model_depth + "_hidden" + self.hidden_size + "_time" + self.time_embedding_size + ".pth"
 
         if os.path.exists(self.model_path):
             self.model.load_state_dict(torch.load(self.model_path, map_location=self.device))
