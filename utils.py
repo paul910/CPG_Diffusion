@@ -92,8 +92,7 @@ def console_log(message: str, header=True):
     line_width = terminal_width - 2
 
     msg_length = len(message)
-    if msg_length % 2 == 1:
-        msg_length += 1
+    msg_length += 1 if msg_length % 2 == 1 else 0
 
     horizontal_dash_count = (line_width - msg_length) // 2
     i = 1 if (line_width - msg_length) % 2 == 1 else 0
