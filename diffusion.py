@@ -147,7 +147,7 @@ class Diffusion:
         for epoch in range(self.epochs):
 
             self.model.train()
-            print((40 * '-') + f'Epoch: {epoch}'.center(20) + (40 * '-'))
+            console_log(f'Epoch: {epoch}', False)
 
             for step, graph in enumerate(tqdm(self.train_loader, total=len(self.train_loader), desc="Training")):
                 self.optimizer.zero_grad()

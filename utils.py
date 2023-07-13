@@ -1,3 +1,5 @@
+import shutil
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -85,6 +87,21 @@ def plot_array(values, x_axis=None, yaxis=None, title=None):
     plt.show()
 
 
-def console_log(message: str):
-    print((100 * '-') + '\n' + (30 * '-') + message.center(40) + (30 * '-') + '\n' + (100 * '-'))
+def console_log(message: str, header=True):
+    terminal_width, _ = shutil.get_terminal_size()
+    line_width = terminal_width - 2
 
+    msg_length = len(message)
+    if msg_length % 2 == 1:
+        msg_length += 1
+
+    horizontal_dash_count = (line_width - msg_length) // 2
+    horizontal_dashes = '-' * horizontal_dash_count
+
+    output_line = f"{horizontal_dashes}{message.center(msg_length + 2)}{horizontal_dashes}"
+    separator_line = '-' * terminal_width
+
+    if header:
+        print(separator_line + "\n" + output_line + "\n" + separator_line)
+    else:
+        print(output_line)
