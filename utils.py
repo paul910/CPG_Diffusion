@@ -96,9 +96,9 @@ def console_log(message: str, header=True):
         msg_length += 1
 
     horizontal_dash_count = (line_width - msg_length) // 2
-    horizontal_dashes = '-' * horizontal_dash_count
+    i = 1 if (line_width - msg_length) % 2 == 1 else 0
 
-    output_line = f"{horizontal_dashes}{message.center(msg_length + 2)}{horizontal_dashes}"
+    output_line = f"{'-' * (horizontal_dash_count + i)}{message.center(msg_length + 2)}{'-' * horizontal_dash_count}"
     separator_line = '-' * terminal_width
 
     if header:
