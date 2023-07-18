@@ -6,6 +6,7 @@ from utils import console_log
 
 class Logger:
     def __init__(self, config: configparser.ConfigParser):
+        self.config = config
         self.log_wandb = config.getboolean('LOGGING', 'log_wandb')
 
         if self.log_wandb:
