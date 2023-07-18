@@ -21,6 +21,7 @@ class GraphUNet(torch.nn.Module):
             hidden_channels: int,
             out_channels: int,
             depth: int,
+            time_emb_dim: int,
     ):
         super().__init__()
         assert depth >= 1
@@ -30,7 +31,7 @@ class GraphUNet(torch.nn.Module):
         self.depth = depth
         self.pool_ratios = 0.5
 
-        self.time_emb_dim = 32
+        self.time_emb_dim = time_emb_dim
         self.time_mlp = nn.Sequential(
             SinusoidalPositionEmbeddings(self.time_emb_dim),
             nn.Linear(self.time_emb_dim, self.time_emb_dim),
