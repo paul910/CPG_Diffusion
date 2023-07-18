@@ -25,9 +25,9 @@ class ModelManager(ABC):
         self.learning_rate = self.model_config.getfloat('learning_rate')
 
         if model_name == 'MODEL_X':
-            self.model = GraphUNet(self.start_units, self.hidden_units, self.start_units, self.depth, self.time_emb_dim)
+            self.model = GraphUNet(self.start_units, self.hidden_units, self.start_units, self.depth, self.time_emb_dim).to(self.device)
         elif model_name == 'MODEL_ADJ':
-            self.model = Unet(self.depth, self.start_units, self.time_emb_dim)
+            self.model = Unet(self.depth, self.start_units, self.time_emb_dim).to(self.device)
 
         self.model_path = "models/" + model_name + "_depth" + str(self.depth) + "_start" + \
                           str(self.start_units) + "_hidden" + str(self.hidden_units) + "_time" + \
