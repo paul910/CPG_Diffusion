@@ -17,15 +17,7 @@ class Logger:
     def config_wandb(self):
         self.wandb.init(
             # set the wandb project where this run will be logged
-            project=self.config.get("DEFAULT", "project_name"),
-
-            # track hyperparameters and run metadata
-            config={
-                "learning_rate": self.config.getfloat('TRAINING', 'learning_rate'),
-                "model_depth": self.config.getint('MODEL', 'depth'),
-                "time_embedding_size": self.config.getint('MODEL', 'time_emb_dim'),
-                "epochs": self.config.getint('TRAINING', 'epochs'),
-            }
+            project=self.config.get("DEFAULT", "project_name")
         )
 
     def val_log(self, mean_losses, model_name):
