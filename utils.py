@@ -19,7 +19,7 @@ def get_index_from_list(vals, t, x_shape):
 
 
 def to_adj(edge_index):
-    return to_dense_adj(edge_index).squeeze()
+    return to_dense_adj(edge_index)
 
 
 def adjust_feature_values(x):

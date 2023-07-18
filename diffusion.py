@@ -1,4 +1,5 @@
 import configparser
+import math
 import os
 import warnings
 
@@ -13,7 +14,7 @@ from tqdm import tqdm
 
 import wandb
 from dataset import CPGDataset
-from model import GraphUNet
+from model import GraphUNet, Unet
 from utils import geometric_beta_schedule, get_index_from_list, to_adj, plot_array, adjust_feature_values, console_log, \
     plot
 
@@ -32,6 +33,8 @@ class Diffusion:
         self.train_loader = DataLoader(self.train_dataset, shuffle=True)
         self.test_loader = DataLoader(self.test_dataset, shuffle=False)
 
+
+        # Model Features
         self.model_depth = config.getint('MODEL', 'model_depth')
         self.hidden_size = config.getint('MODEL', 'hidden_size')
         self.time_embedding_size = config.getint('MODEL', 'time_embedding_size')
@@ -46,6 +49,12 @@ class Diffusion:
 
         self.optimizer = Adam(self.model.parameters(), lr=self.learning_rate)
 
+        # Model Adjacency Matrix
+        self.model_adj_depth = config.getint('MODEL', 'model_adj_depth')
+        self.model_adj_path = "models/model_adj_depth" + str(self.model_adj_depth) + ".pth"
+        self.model_adj = Unet(self.model_adj_depth)
+        self.optimizer_adj = Adam(self.model_adj.parameters(), lr=self.learning_rate)
+
         self.T = config.getint('TRAINING', 'T')
         self.betas = geometric_beta_schedule(timesteps=self.T)
         alphas = 1. - self.betas
@@ -57,6 +66,7 @@ class Diffusion:
         self.posterior_variance = self.betas * (1. - alphas_cumprod_prev) / (1. - alphas_cumprod)
 
         self.val_losses = {}
+        self.val_losses_adj = {}
 
         self.log_wandb = config.getboolean('LOGGING', 'log_wandb')
         if self.log_wandb:
@@ -78,8 +88,9 @@ class Diffusion:
             }
         )
 
-    def save_model(self):
+    def save_models(self):
         torch.save(self.model.state_dict(), self.model_path)
+        torch.save(self.model_adj.state_dict(), self.model_adj_path)
 
     def forward_diffusion_sample(self, input: Tensor, t: Tensor):
         noise = torch.randn_like(input)
@@ -141,12 +152,57 @@ class Diffusion:
         self.val_losses["total_smooth_l1_loss"] += smooth_l1_loss.item()
         self.val_losses["total_mse_loss"] += mse_loss.item()
 
+    def val_loss_adj(self, graph):
+        loss, smooth_l1_loss, mse_loss = self.calculate_loss(graph)
+
+        self.val_losses_adj["total_loss"] += loss.item()
+        self.val_losses_adj["total_smooth_l1_loss"] += smooth_l1_loss.item()
+        self.val_losses_adj["total_mse_loss"] += mse_loss.item()
+
+    def calculate_loss_adj(self, graph):
+        t = torch.randint(0, self.T, (1,), device=self.device).long()
+
+        adj = to_adj(graph.edge_index)
+        padding_size = int(adj.shape[1] % (math.pow(2, self.model_adj_depth)))
+
+        if padding_size != 0:
+            pad = int(math.pow(2, self.model_adj_depth) - padding_size)
+            if pad % 2 == 0:
+                adj = F.pad(adj, (pad // 2, pad // 2, pad // 2, pad // 2), "constant", 0)
+            else:
+                adj = F.pad(adj, (pad // 2, pad // 2 + 1, pad // 2, pad // 2 + 1), "constant", 0)
+
+        adj_t, adj_noise = self.forward_diffusion_sample(adj, t)
+
+        adj_t = adj_t.unsqueeze(0)
+
+        adj_noise_pred = self.model_adj(adj_t.to(self.device), t)
+
+        adj_noise_pred.to(self.device)
+        adj_noise.to(self.device)
+
+        smooth_l1_loss = F.smooth_l1_loss(adj_noise, adj_noise_pred)
+        mse_loss = F.mse_loss(adj_noise, adj_noise_pred)
+
+        loss = smooth_l1_loss + mse_loss
+
+        return loss, smooth_l1_loss, mse_loss
+
+    def train_loss_adj(self, graph):
+        loss, smooth_l1_loss, mse_loss = self.calculate_loss_adj(graph)
+        loss.backward()
+
+        if self.log_wandb:
+            self.wandb.log(
+                {"loss_adj": loss.item(), "smooth_l1_loss_adj": smooth_l1_loss.item(), "mse_loss_adj": mse_loss.item()})
+
     def train(self):
         console_log('Model Training')
 
         for epoch in range(self.epochs):
 
             self.model.train()
+            self.model_adj.train()
             console_log(f'Epoch: {epoch}', False)
 
             for step, graph in enumerate(tqdm(self.train_loader, total=len(self.train_loader), desc="Training")):
@@ -154,7 +210,14 @@ class Diffusion:
                 self.train_loss(graph)
                 self.optimizer.step()
 
-            self.save_model()
+                self.optimizer_adj.zero_grad()
+                self.train_loss_adj(graph)
+                self.optimizer_adj.step()
+
+                if step == 10:
+                    break
+
+            self.save_models()
             self.validate()
 
     @torch.no_grad()
@@ -164,16 +227,25 @@ class Diffusion:
 
         for graph in tqdm(self.test_loader, total=len(self.test_loader), desc="Validating"):
             self.val_loss(graph)
+            self.val_loss_adj(graph)
 
         mean_losses = {key: val / len(self.test_loader) for key, val in self.val_losses.items()}
+        mean_losses_adj = {key: val / len(self.test_loader) for key, val in self.val_losses_adj.items()}
         if self.log_wandb:
             self.wandb.log({
                 "val_loss": mean_losses["total_loss"],
                 "val_smooth_l1_loss": mean_losses["total_smooth_l1_loss"],
                 "val_mse_loss": mean_losses["total_mse_loss"]
             })
+
+            self.wandb.log({
+                "val_loss_adj": mean_losses_adj["total_loss"],
+                "val_smooth_l1_loss_adj": mean_losses_adj["total_smooth_l1_loss"],
+                "val_mse_loss_adj": mean_losses_adj["total_mse_loss"]
+            })
         else:
             console_log(f"Loss: {mean_losses['total_loss']}")
+            console_log(f"Loss Adj: {mean_losses_adj['total_loss']}")
 
     def show_forward_diff(self, num_show=6):
         console_log('Show forward diffusion')
@@ -195,7 +267,7 @@ class Diffusion:
         self.model.eval()
 
         edge_index = self.test_loader.dataset[5].edge_index.to(self.device)
-        x = torch.randn(to_adj(edge_index).shape[0], self.num_node_features).to(self.device)
+        x = torch.randn(to_adj(edge_index).shape[1], self.num_node_features).to(self.device) # TODO: check if this is correct
 
         x_out = []
 
