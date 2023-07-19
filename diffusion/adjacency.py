@@ -50,12 +50,9 @@ class Adjacency(DiffusionManager):
         adj_noise_pred.to(self.device)
         adj_noise.to(self.device)
 
-        smooth_l1_loss = F.smooth_l1_loss(adj_noise, adj_noise_pred)
         mse_loss = F.mse_loss(adj_noise, adj_noise_pred)
 
-        loss = smooth_l1_loss + mse_loss
-
-        return loss, smooth_l1_loss, mse_loss
+        return mse_loss
 
     def pad(self, adj):
         padding_size = int(adj.shape[-1] % (math.pow(2, self.depth)))

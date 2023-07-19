@@ -54,12 +54,12 @@ class Diffusion:
             for step, graph in enumerate(tqdm(self.train_loader, total=len(self.train_loader), desc="Training")):
                 self.adjacency.optimizer.zero_grad()
                 train_loss_adj = self.adjacency.loss(graph)
-                train_loss_adj[0].backward()
+                train_loss_adj.backward()
                 self.adjacency.optimizer.step()
 
                 self.features.optimizer.zero_grad()
                 train_loss_features = self.features.loss(graph)
-                train_loss_features[0].backward()
+                train_loss_features.backward()
                 self.features.optimizer.step()
 
                 self.logger.train_log(train_loss_adj, train_loss_features)
@@ -71,25 +71,18 @@ class Diffusion:
 
     @torch.no_grad()
     def validate(self):
-        loss_adj = {"total_loss": 0, "total_smooth_l1_loss": 0, "total_mse_loss": 0}
-        loss_features = {"total_loss": 0, "total_smooth_l1_loss": 0, "total_mse_loss": 0}
+        loss_adj = 0
+        loss_features = 0
 
         self.adjacency.model.eval()
         self.features.model.eval()
 
         for graph in tqdm(self.test_loader, total=len(self.test_loader), desc="Validating"):
-            loss, smooth_l1_loss, mse_loss = self.adjacency.loss(graph)
-            loss_adj["total_loss"] += loss
-            loss_adj["total_smooth_l1_loss"] += smooth_l1_loss
-            loss_adj["total_mse_loss"] += mse_loss
+            loss_adj += self.adjacency.loss(graph)
+            loss_features += self.features.loss(graph)
 
-            loss, smooth_l1_loss, mse_loss = self.features.loss(graph)
-            loss_features["total_loss"] += loss
-            loss_features["total_smooth_l1_loss"] += smooth_l1_loss
-            loss_features["total_mse_loss"] += mse_loss
-
-        mean_losses_adj = {key: val / len(self.test_loader) for key, val in loss_adj.items()}
-        mean_losses_features = {key: val / len(self.test_loader) for key, val in loss_features.items()}
+        mean_losses_adj = loss_adj / len(self.test_loader)
+        mean_losses_features = loss_features / len(self.test_loader)
 
         self.logger.val_log(mean_losses_adj, mean_losses_features)
 
