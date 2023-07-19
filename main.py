@@ -3,6 +3,8 @@ import math
 import random
 import warnings
 from datetime import datetime
+from os import makedirs
+from os.path import exists
 
 import torch
 from torch_geometric.data import Data
@@ -165,6 +167,8 @@ class Diffusion:
             self.train()
         elif self.config.get('DEFAULT', 'mode') == 'sample':
             data = self.sample()
+            if not exists('data/generated'):
+                makedirs('data/generated')
             torch.save(data, 'data/generated/data_' + str(datetime.now()) + '.pt')
         elif self.config.get('DEFAULT', 'mode') == 'forward_diffusion':
             # self.show_forward_diff()
