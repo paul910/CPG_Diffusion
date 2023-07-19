@@ -1,6 +1,7 @@
 import configparser
 
 import wandb
+
 from utils.utils import console_log
 
 
@@ -15,10 +16,7 @@ class Logger:
             self.config_wandb()
 
     def config_wandb(self):
-        self.wandb.init(
-            # set the wandb project where this run will be logged
-            project=self.config.get("DEFAULT", "project_name")
-        )
+        self.wandb.init(project=self.config.get("DEFAULT", "project_name"))
 
     def val_log(self, mean_losses_adj, mean_losses_features):
         if self.log_wandb:
