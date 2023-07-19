@@ -3,7 +3,7 @@ import math
 import torch
 from torch import Tensor
 from torch import nn
-from torch_geometric.nn import GCNConv, TopKPooling, GATConv
+from torch_geometric.nn import GCNConv, SAGPooling, GATConv
 from torch_geometric.typing import PairTensor
 from torch_geometric.utils import (
     add_self_loops,
@@ -97,7 +97,7 @@ class DownBlock(torch.nn.Module):
         self.conv2 = GATConv(channels, channels, improved=True)
         self.n2 = nn.LayerNorm(channels)
 
-        self.pool = TopKPooling(channels, pool_ratio)
+        self.pool = SAGPooling(channels, pool_ratio)
         self.time = nn.Linear(time_emb_dim, channels)
 
     def forward(self, x, edge_index, edge_weight, t):
