@@ -58,7 +58,7 @@ class Adjacency(DiffusionManager):
         return loss, smooth_l1_loss, mse_loss
 
     def pad(self, adj):
-        padding_size = int(adj.shape[1] % (math.pow(2, self.depth)))
+        padding_size = int(adj.shape[-1] % (math.pow(2, self.depth)))
 
         if padding_size != 0:
             pad = int(math.pow(2, self.depth) - padding_size)
@@ -66,3 +66,5 @@ class Adjacency(DiffusionManager):
                 return F.pad(adj, (pad // 2, pad // 2, pad // 2, pad // 2), "constant", 0)
             else:
                 return F.pad(adj, (pad // 2, pad // 2 + 1, pad // 2, pad // 2 + 1), "constant", 0)
+
+        return adj
