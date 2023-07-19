@@ -6,18 +6,18 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch_geometric.data import Data
 
-from modelmanager import ModelManager
-from utils import to_adj, get_index_from_list
+from diffusion.diffusionmanager import DiffusionManager
+from utils.utils import to_adj, get_index_from_list
 
 
-class Adjacency(ModelManager):
+class Adjacency(DiffusionManager):
 
     def __init__(self, config: configparser.ConfigParser):
         super().__init__(config, "MODEL_ADJ")
 
     @torch.no_grad()
     def sample_timestep(self, graph: Data, t: Tensor):
-        adj = to_adj(graph.edge_index)
+        adj = to_adj(graph.edge_index).unsqueeze(0)
 
         betas_t = get_index_from_list(self.betas, t, adj.shape)
         sqrt_one_minus_alphas_cumprod_t = get_index_from_list(
@@ -39,15 +39,7 @@ class Adjacency(ModelManager):
     def loss(self, graph):
         t = torch.randint(0, self.T, (1,), device=self.device).long()
 
-        adj = to_adj(graph.edge_index)
-        padding_size = int(adj.shape[1] % (math.pow(2, self.depth)))
-
-        if padding_size != 0:
-            pad = int(math.pow(2, self.depth) - padding_size)
-            if pad % 2 == 0:
-                adj = F.pad(adj, (pad // 2, pad // 2, pad // 2, pad // 2), "constant", 0)
-            else:
-                adj = F.pad(adj, (pad // 2, pad // 2 + 1, pad // 2, pad // 2 + 1), "constant", 0)
+        adj = self.pad(to_adj(graph.edge_index))
 
         adj_t, adj_noise = self.forward_diffusion_sample(adj, t)
 
@@ -64,3 +56,13 @@ class Adjacency(ModelManager):
         loss = smooth_l1_loss + mse_loss
 
         return loss, smooth_l1_loss, mse_loss
+
+    def pad(self, adj):
+        padding_size = int(adj.shape[1] % (math.pow(2, self.depth)))
+
+        if padding_size != 0:
+            pad = int(math.pow(2, self.depth) - padding_size)
+            if pad % 2 == 0:
+                return F.pad(adj, (pad // 2, pad // 2, pad // 2, pad // 2), "constant", 0)
+            else:
+                return F.pad(adj, (pad // 2, pad // 2 + 1, pad // 2, pad // 2 + 1), "constant", 0)

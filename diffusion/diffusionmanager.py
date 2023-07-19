@@ -7,11 +7,11 @@ from torch import Tensor
 import torch.nn.functional as F
 from torch.optim import Adam
 
-from model import GraphUNet, Unet
-from utils import get_index_from_list, geometric_beta_schedule
+from diffusion.model import GraphUNet, Unet
+from utils.utils import get_index_from_list, geometric_beta_schedule
 
 
-class ModelManager(ABC):
+class DiffusionManager(ABC):
 
     def __init__(self, config: configparser.ConfigParser, model_name: str):
         self.config = config
@@ -24,14 +24,17 @@ class ModelManager(ABC):
         self.time_emb_dim = self.model_config.getint('time_emb_dim')
         self.learning_rate = self.model_config.getfloat('learning_rate')
 
+        self.model_path = "model/store/" + model_name + "_depth" + str(self.depth) + "_start" + \
+                          str(self.start_units) + "_hidden" + str(self.hidden_units) + "_time" + \
+                          str(self.time_emb_dim) + ".pth"
+
         if model_name == 'MODEL_X':
             self.model = GraphUNet(self.start_units, self.hidden_units, self.start_units, self.depth, self.time_emb_dim).to(self.device)
         elif model_name == 'MODEL_ADJ':
             self.model = Unet(self.depth, self.start_units, self.time_emb_dim).to(self.device)
 
-        self.model_path = "models/" + model_name + "_depth" + str(self.depth) + "_start" + \
-                          str(self.start_units) + "_hidden" + str(self.hidden_units) + "_time" + \
-                          str(self.time_emb_dim) + ".pth"
+        self.load_model()
+
         self.optimizer = Adam(self.model.parameters(), lr=self.learning_rate)
 
         self.T = config.getint('TRAINING', 'T')

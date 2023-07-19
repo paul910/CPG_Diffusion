@@ -1,6 +1,6 @@
 #CPG
-data/
-models/
+data/reveal/
+diffusion/store/
 wandb/
 processed/
 raw/

@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import random_split
 from torch_geometric.data import Dataset
 
-from utils import console_log
+from utils.utils import console_log
 
 
 class CPGDataset(Dataset):

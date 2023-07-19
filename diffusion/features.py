@@ -5,11 +5,11 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch_geometric.data import Data
 
-from modelmanager import ModelManager
-from utils import adjust_feature_values, get_index_from_list
+from diffusion.diffusionmanager import DiffusionManager
+from utils.utils import adjust_feature_values, get_index_from_list
 
 
-class Features(ModelManager):
+class Features(DiffusionManager):
 
     def __init__(self, config: configparser.ConfigParser):
         super().__init__(config, "MODEL_X")
