@@ -1,5 +1,6 @@
 #CPG
 data/reveal/
+data/generated/
 diffusion/store/
 wandb/
 processed/

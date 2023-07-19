@@ -1,8 +1,8 @@
 import configparser
-import datetime
 import math
 import random
 import warnings
+from datetime import datetime
 
 import torch
 from torch_geometric.data import Data
@@ -10,8 +10,8 @@ from torch_geometric.loader import DataLoader
 from torch_geometric.utils import dense_to_sparse
 from tqdm import tqdm
 
-from diffusion.adjacency import Adjacency
 from data.dataset import CPGDataset
+from diffusion.adjacency import Adjacency
 from diffusion.features import Features
 from utils.logger import Logger
 from utils.utils import console_log
@@ -26,11 +26,13 @@ class Diffusion:
 
         self.epochs = config.getint('TRAINING', 'epochs')
 
-        self.dataset = CPGDataset(config.get('DATASET', 'dataset_path'), config.getint('DATASET', 'num_node_features'))
-        self.num_node_features = config.getint('DATASET', 'num_node_features')
-        self.train_dataset, self.test_dataset = self.dataset.train_test_split()
-        self.train_loader = DataLoader(self.train_dataset, shuffle=True)
-        self.test_loader = DataLoader(self.test_dataset, shuffle=False)
+        if self.config.get('DEFAULT', 'mode') == "train":
+            self.dataset = CPGDataset(config.get('DATASET', 'dataset_path'),
+                                      config.getint('DATASET', 'num_node_features'))
+            self.num_node_features = config.getint('DATASET', 'num_node_features')
+            self.train_dataset, self.test_dataset = self.dataset.train_test_split()
+            self.train_loader = DataLoader(self.train_dataset, shuffle=True)
+            self.test_loader = DataLoader(self.test_dataset, shuffle=False)
 
         self.adjacency = Adjacency(config)
         self.features = Features(config)
@@ -101,7 +103,8 @@ class Diffusion:
                                        self.config.getint('DATASET', 'max_nodes'))
 
             pad = num_nodes % math.pow(2, self.config.getint("MODEL_ADJ", "depth"))
-            num_nodes = num_nodes if pad == 0 else num_nodes + int(math.pow(2, self.config.getint("MODEL_ADJ", "depth")) - pad)
+            num_nodes = num_nodes if pad == 0 else num_nodes + int(
+                math.pow(2, self.config.getint("MODEL_ADJ", "depth")) - pad)
 
             x = torch.randn(num_nodes, self.num_node_features).to(self.device)
             adj = torch.randint(2, (num_nodes, num_nodes)).to(self.device)
@@ -162,7 +165,7 @@ class Diffusion:
             self.train()
         elif self.config.get('DEFAULT', 'mode') == 'sample':
             data = self.sample()
-            torch.save(data, 'data_' + str(datetime.time) + '.pt')
+            torch.save(data, 'data/generated/data_' + str(datetime.now()) + '.pt')
         elif self.config.get('DEFAULT', 'mode') == 'forward_diffusion':
             # self.show_forward_diff()
             pass
