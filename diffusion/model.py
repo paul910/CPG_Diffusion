@@ -41,11 +41,11 @@ class GraphUNet(torch.nn.Module):
         self.downs = nn.ModuleList()
         self.ups = nn.ModuleList()
 
-        self.conv_in = GCNConv(in_channels, hidden_channels, improved=True)
+        self.conv_in = SAGEConv(in_channels, hidden_channels)
         for i in range(depth):
             self.downs.append(DownBlock(hidden_channels, self.time_emb_dim, self.pool_ratios))
             self.ups.append(UpBlock(hidden_channels, self.time_emb_dim))
-        self.conv_out = GCNConv(hidden_channels, out_channels, improved=True)
+        self.conv_out = SAGEConv(hidden_channels, out_channels)
 
     def forward(self, x: Tensor, edge_index: Tensor, timestep: Tensor) -> Tensor:
         """"""
@@ -92,9 +92,9 @@ class DownBlock(torch.nn.Module):
         super().__init__()
         self.act = nn.ReLU()
 
-        self.conv1 = SAGEConv(channels, channels, improved=True)
+        self.conv1 = SAGEConv(channels, channels)
         self.n1 = nn.LayerNorm(channels)
-        self.conv2 = SAGEConv(channels, channels, improved=True)
+        self.conv2 = SAGEConv(channels, channels)
         self.n2 = nn.LayerNorm(channels)
 
         self.pool = SAGPooling(channels, pool_ratio)
@@ -127,9 +127,9 @@ class UpBlock(torch.nn.Module):
         super().__init__()
         self.act = nn.ReLU()
 
-        self.conv1 = SAGEConv(channels, channels, improved=True)
+        self.conv1 = SAGEConv(channels, channels)
         self.n1 = nn.LayerNorm(channels)
-        self.conv2 = SAGEConv(channels, channels, improved=True)
+        self.conv2 = SAGEConv(channels, channels)
         self.n2 = nn.LayerNorm(channels)
 
         self.time = nn.Linear(time_emb_dim, channels)

@@ -8,7 +8,6 @@ import torch.nn.functional as F
 from torch.optim import Adam
 
 from diffusion.model import GraphUNet, Unet
-from diffusion.testmodel import GraphSAGE
 from utils.utils import get_index_from_list, geometric_beta_schedule
 
 
