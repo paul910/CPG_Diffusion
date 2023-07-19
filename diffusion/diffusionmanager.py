@@ -24,6 +24,9 @@ class DiffusionManager(ABC):
         self.time_emb_dim = self.model_config.getint('time_emb_dim')
         self.learning_rate = self.model_config.getfloat('learning_rate')
 
+        if not os.path.exists("model/store"):
+            os.makedirs("model/store")
+
         self.model_path = "model/store/" + model_name + "_depth" + str(self.depth) + "_start" + \
                           str(self.start_units) + "_hidden" + str(self.hidden_units) + "_time" + \
                           str(self.time_emb_dim) + ".pth"

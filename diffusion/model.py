@@ -35,7 +35,7 @@ class GraphUNet(torch.nn.Module):
         self.time_mlp = nn.Sequential(
             SinusoidalPositionEmbeddings(self.time_emb_dim),
             nn.Linear(self.time_emb_dim, self.time_emb_dim),
-            nn.Tanh()
+            nn.ReLU()
         )
 
         self.downs = nn.ModuleList()
@@ -90,7 +90,7 @@ class GraphUNet(torch.nn.Module):
 class DownBlock(torch.nn.Module):
     def __init__(self, channels, time_emb_dim, pool_ratio):
         super().__init__()
-        self.act = nn.Tanh()
+        self.act = nn.ReLU()
 
         self.conv1 = GCNConv(channels, channels, improved=True)
         self.n1 = nn.LayerNorm(channels)
@@ -125,7 +125,7 @@ class DownBlock(torch.nn.Module):
 class UpBlock(torch.nn.Module):
     def __init__(self, channels, time_emb_dim):
         super().__init__()
-        self.act = nn.Tanh()
+        self.act = nn.ReLU()
 
         self.conv1 = GCNConv(channels, channels, improved=True)
         self.n1 = nn.LayerNorm(channels)

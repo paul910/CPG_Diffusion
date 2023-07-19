@@ -60,7 +60,6 @@ class Diffusion:
                 '''
                 train_loss_adj = 0
 
-
                 self.features.optimizer.zero_grad()
                 train_loss_features = self.features.loss(graph)
                 train_loss_features.backward()
