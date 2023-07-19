@@ -14,6 +14,69 @@ from torch_geometric.utils import (
 torch.autograd.set_detect_anomaly(True)
 
 
+class TestModel(torch.nn.Module):
+    def __init__(self, in_channels: int, out_channels: int, time_emb_dim: int):
+        super().__init__()
+        self.time_emb_dim = time_emb_dim
+        self.time_mlp = nn.Sequential(
+            SinusoidalPositionEmbeddings(self.time_emb_dim),
+            nn.Linear(self.time_emb_dim, self.time_emb_dim),
+            nn.ReLU()
+        )
+
+        self.act = nn.ReLU()
+        self.conv_in = GCNConv(in_channels, in_channels)
+
+        self.conv1 = GCNConv(in_channels, in_channels * 2)
+        self.n1 = nn.LayerNorm(in_channels * 2)
+        self.time1 = nn.Linear(time_emb_dim, in_channels * 2)
+        self.conv1_2 = GCNConv(in_channels * 2, in_channels * 2)
+        self.n1_2 = nn.LayerNorm(in_channels * 2)
+
+        self.conv2 = GCNConv(in_channels * 2, in_channels * 4)
+        self.n2 = nn.LayerNorm(in_channels * 4)
+        self.time2 = nn.Linear(time_emb_dim, in_channels * 4)
+        self.conv2_2 = GCNConv(in_channels * 4, in_channels * 44)
+        self.n2_2 = nn.LayerNorm(in_channels * 4)
+
+        self.conv3 = GCNConv(in_channels * 4, in_channels * 2)
+        self.n3 = nn.LayerNorm(in_channels * 2)
+        self.time3 = nn.Linear(time_emb_dim, in_channels * 2)
+        self.conv3_2 = GCNConv(in_channels * 2, in_channels * 2)
+        self.n3_2 = nn.LayerNorm(in_channels * 2)
+
+        self.conv4 = GCNConv(in_channels * 2, in_channels)
+        self.n4 = nn.LayerNorm(in_channels)
+        self.time4 = nn.Linear(time_emb_dim, in_channels)
+        self.conv4_2 = GCNConv(in_channels, in_channels)
+        self.n4_2 = nn.LayerNorm(in_channels)
+
+        self.conv_out = GCNConv(in_channels, out_channels)
+
+    def forward(self, x: Tensor, edge_index: Tensor, t: Tensor) -> Tensor:
+        t_mlp = self.time_mlp(t)
+
+        x = self.act(self.conv_in(x, edge_index))
+
+        x = self.n1(self.act(self.conv1(x, edge_index)))
+        x = x + self.act(self.time1(t_mlp))
+        x = self.n1_2(self.act(self.conv1_2(x, edge_index)))
+
+        x = self.n2(self.act(self.conv2(x, edge_index)))
+        x = x + self.act(self.time2(t_mlp))
+        x = self.n2_2(self.act(self.conv2_2(x, edge_index)))
+
+        x = self.n3(self.act(self.conv3(x, edge_index)))
+        x = x + self.act(self.time3(t_mlp))
+        x = self.n3_2(self.act(self.conv3_2(x, edge_index)))
+
+        x = self.n4(self.act(self.conv4(x, edge_index)))
+        x = x + self.act(self.time4(t_mlp))
+        x = self.n4_2(self.act(self.conv4_2(x, edge_index)))
+
+        return self.conv_out(x, edge_index)
+
+
 class GraphUNet(torch.nn.Module):
     def __init__(
             self,
@@ -185,7 +248,7 @@ class Unet(nn.Module):
         super().__init__()
         in_channels = 1
         start = model_start_channels
-        down_channels = tuple(start * 2**i for i in range(model_depth))
+        down_channels = tuple(start * 2 ** i for i in range(model_depth))
         up_channels = tuple(reversed(down_channels))
         out_dim = 1
         time_emb_dim = time_emb_dim
