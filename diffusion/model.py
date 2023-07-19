@@ -36,7 +36,7 @@ class TestModel(torch.nn.Module):
         self.conv2 = GCNConv(in_channels * 2, in_channels * 4)
         self.n2 = nn.LayerNorm(in_channels * 4)
         self.time2 = nn.Linear(time_emb_dim, in_channels * 4)
-        self.conv2_2 = GCNConv(in_channels * 4, in_channels * 44)
+        self.conv2_2 = GCNConv(in_channels * 4, in_channels * 4)
         self.n2_2 = nn.LayerNorm(in_channels * 4)
 
         self.conv3 = GCNConv(in_channels * 4, in_channels * 2)
