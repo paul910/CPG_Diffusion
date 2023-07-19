@@ -17,6 +17,8 @@ torch.autograd.set_detect_anomaly(True)
 class TestModel(torch.nn.Module):
     def __init__(self, in_channels: int, out_channels: int, time_emb_dim: int):
         super().__init__()
+        self.img = 32
+
         self.time_emb_dim = time_emb_dim
         self.time_mlp = nn.Sequential(
             SinusoidalPositionEmbeddings(self.time_emb_dim),
@@ -53,6 +55,34 @@ class TestModel(torch.nn.Module):
 
         self.conv_out = GCNConv(in_channels, out_channels)
 
+        self.conv_im_in = nn.Conv2d(1, self.img, 3, padding=1)
+
+        self.conv_im_1 = nn.Conv2d(self.img, self.img * 2, 3, padding=1)
+        self.n_im_1 = nn.BatchNorm2d(self.img * 2)
+        self.time_im_1 = nn.Linear(time_emb_dim, self.img * 2)
+        self.conv_im_1_2 = nn.Conv2d(self.img * 2, self.img * 2, 3, padding=1)
+        self.n_im_1_2 = nn.BatchNorm2d(self.img * 2)
+
+        self.conv_im_2 = nn.Conv2d(self.img * 2, self.img * 4, 3, padding=1)
+        self.n_im_2 = nn.BatchNorm2d(self.img * 4)
+        self.time_im_2 = nn.Linear(time_emb_dim, self.img * 4)
+        self.conv_im_2_2 = nn.Conv2d(self.img * 4, self.img * 4, 3, padding=1)
+        self.n_im_2_2 = nn.BatchNorm2d(self.img * 4)
+
+        self.conv_im_3 = nn.Conv2d(self.img * 4, self.img * 2, 3, padding=1)
+        self.n_im_3 = nn.BatchNorm2d(self.img * 2)
+        self.time_im_3 = nn.Linear(time_emb_dim, self.img * 2)
+        self.conv_im_3_2 = nn.Conv2d(self.img * 2, self.img * 2, 3, padding=1)
+        self.n_im_3_2 = nn.BatchNorm2d(self.img * 2)
+
+        self.conv_im_4 = nn.Conv2d(self.img * 2, self.img, 3, padding=1)
+        self.n_im_4 = nn.BatchNorm2d(self.img)
+        self.time_im_4 = nn.Linear(time_emb_dim, self.img)
+        self.conv_im_4_2 = nn.Conv2d(self.img, self.img, 3, padding=1)
+        self.n_im_4_2 = nn.BatchNorm2d(self.img)
+
+        self.conv_im_out = nn.Conv2d(self.img, out_channels, 3, padding=1)
+
     def forward(self, x: Tensor, edge_index: Tensor, t: Tensor) -> Tensor:
         t_mlp = self.time_mlp(t)
 
@@ -74,7 +104,39 @@ class TestModel(torch.nn.Module):
         x = x + self.act(self.time4(t_mlp))
         x = self.n4_2(self.act(self.conv4_2(x, edge_index)))
 
-        return self.conv_out(x, edge_index)
+        x = self.act(self.conv_out(x, edge_index))
+
+        x = x.unsqueeze(0).unsqueeze(0)
+
+        x = self.act(self.conv_im_in(x))
+
+        x = self.n_im_1(self.act(self.conv_im_1(x)))
+        time_emb = self.act(self.time_im_1(t_mlp))
+        time_emb = time_emb[(...,) + (None,) * 2]
+        x = x + time_emb
+        x = self.n_im_1_2(self.act(self.conv_im_1_2(x)))
+
+        x = self.n_im_2(self.act(self.conv_im_2(x)))
+        time_emb = self.act(self.time_im_2(t_mlp))
+        time_emb = time_emb[(...,) + (None,) * 2]
+        x = x + time_emb
+        x = self.n_im_2_2(self.act(self.conv_im_2_2(x)))
+
+        x = self.n_im_3(self.act(self.conv_im_3(x)))
+        time_emb = self.act(self.time_im_3(t_mlp))
+        time_emb = time_emb[(...,) + (None,) * 2]
+        x = x + time_emb
+        x = self.n_im_3_2(self.act(self.conv_im_3_2(x)))
+
+        x = self.n_im_4(self.act(self.conv_im_4(x)))
+        time_emb = self.act(self.time_im_4(t_mlp))
+        time_emb = time_emb[(...,) + (None,) * 2]
+        x = x + time_emb
+        x = self.n_im_4_2(self.act(self.conv_im_4_2(x)))
+
+        x = self.conv_im_out(x)
+
+        return x.squeeze(0).squeeze(0)
 
 
 class GraphUNet(torch.nn.Module):
