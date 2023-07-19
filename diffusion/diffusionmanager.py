@@ -30,8 +30,7 @@ class DiffusionManager(ABC):
                           str(self.time_emb_dim) + ".pth"
 
         if model_name == 'MODEL_X':
-            #self.model = GraphUNet(self.start_units, self.hidden_units, self.start_units, self.depth, self.time_emb_dim).to(self.device)
-            self.model = GraphSAGE().to(self.device)
+            self.model = GraphUNet(self.start_units, self.hidden_units, self.start_units, self.depth, self.time_emb_dim).to(self.device)
         elif model_name == 'MODEL_ADJ':
             self.model = Unet(self.depth, self.start_units, self.time_emb_dim).to(self.device)
 
