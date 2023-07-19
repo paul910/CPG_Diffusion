@@ -29,7 +29,7 @@ class GraphUNet(torch.nn.Module):
         self.hidden_channels = hidden_channels
         self.out_channels = out_channels
         self.depth = depth
-        self.pool_ratios = 0.25
+        self.pool_ratios = 0.5
 
         self.time_emb_dim = time_emb_dim
         self.time_mlp = nn.Sequential(
