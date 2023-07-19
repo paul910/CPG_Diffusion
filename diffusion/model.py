@@ -3,7 +3,7 @@ import math
 import torch
 from torch import Tensor
 from torch import nn
-from torch_geometric.nn import GCNConv, TopKPooling, SAGEConv, SAGPooling
+from torch_geometric.nn import GCNConv, TopKPooling
 from torch_geometric.typing import PairTensor
 from torch_geometric.utils import (
     add_self_loops,
@@ -41,11 +41,11 @@ class GraphUNet(torch.nn.Module):
         self.downs = nn.ModuleList()
         self.ups = nn.ModuleList()
 
-        self.conv_in = SAGEConv(in_channels, hidden_channels)
+        self.conv_in = GCNConv(in_channels, hidden_channels, improved=True)
         for i in range(depth):
             self.downs.append(DownBlock(hidden_channels, self.time_emb_dim, self.pool_ratios))
             self.ups.append(UpBlock(hidden_channels, self.time_emb_dim))
-        self.conv_out = SAGEConv(hidden_channels, out_channels)
+        self.conv_out = GCNConv(hidden_channels, out_channels, improved=True)
 
     def forward(self, x: Tensor, edge_index: Tensor, timestep: Tensor) -> Tensor:
         """"""
@@ -92,12 +92,12 @@ class DownBlock(torch.nn.Module):
         super().__init__()
         self.act = nn.ReLU()
 
-        self.conv1 = SAGEConv(channels, channels)
+        self.conv1 = GCNConv(channels, channels, improved=True)
         self.n1 = nn.LayerNorm(channels)
-        self.conv2 = SAGEConv(channels, channels)
+        self.conv2 = GCNConv(channels, channels, improved=True)
         self.n2 = nn.LayerNorm(channels)
 
-        self.pool = SAGPooling(channels, pool_ratio)
+        self.pool = TopKPooling(channels, pool_ratio)
         self.time = nn.Linear(time_emb_dim, channels)
 
     def forward(self, x, edge_index, edge_weight, t):
@@ -127,9 +127,9 @@ class UpBlock(torch.nn.Module):
         super().__init__()
         self.act = nn.ReLU()
 
-        self.conv1 = SAGEConv(channels, channels)
+        self.conv1 = GCNConv(channels, channels, improved=True)
         self.n1 = nn.LayerNorm(channels)
-        self.conv2 = SAGEConv(channels, channels)
+        self.conv2 = GCNConv(channels, channels, improved=True)
         self.n2 = nn.LayerNorm(channels)
 
         self.time = nn.Linear(time_emb_dim, channels)
