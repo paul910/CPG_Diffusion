@@ -7,7 +7,7 @@ from torch import Tensor
 import torch.nn.functional as F
 from torch.optim import Adam
 
-from diffusion.model import GraphUNet, Unet, TestModel
+from diffusion.model import GraphUNet, Unet
 from utils.utils import get_index_from_list, geometric_beta_schedule
 
 
@@ -29,8 +29,8 @@ class DiffusionManager(ABC):
                           str(self.time_emb_dim) + ".pth"
 
         if model_name == 'MODEL_X':
-            # self.model = GraphUNet(self.start_units, self.hidden_units, self.start_units, self.depth, self.time_emb_dim).to(self.device)
-            self.model = TestModel(self.start_units, self.start_units, self.time_emb_dim).to(self.device)
+            self.model = GraphUNet(self.start_units, self.hidden_units, self.start_units, self.depth,
+                                   self.time_emb_dim).to(self.device)
         elif model_name == 'MODEL_ADJ':
             self.model = Unet(self.depth, self.start_units, self.time_emb_dim).to(self.device)
 
