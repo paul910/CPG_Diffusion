@@ -13,6 +13,7 @@ from torch_geometric.utils import (
 
 torch.autograd.set_detect_anomaly(True)
 
+
 class GraphUNet(torch.nn.Module):
     def __init__(
             self,
