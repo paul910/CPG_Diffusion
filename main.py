@@ -27,11 +27,11 @@ class Diffusion:
         self.config = config
 
         self.epochs = config.getint('TRAINING', 'epochs')
+        self.num_node_features = config.getint('DATASET', 'num_node_features')
 
         if self.config.get('DEFAULT', 'mode') == "train":
             self.dataset = CPGDataset(config.get('DATASET', 'dataset_path'),
                                       config.getint('DATASET', 'num_node_features'))
-            self.num_node_features = config.getint('DATASET', 'num_node_features')
             self.train_dataset, self.test_dataset = self.dataset.train_test_split()
             self.train_loader = DataLoader(self.train_dataset, shuffle=True)
             self.test_loader = DataLoader(self.test_dataset, shuffle=False)
