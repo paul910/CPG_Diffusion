@@ -23,8 +23,8 @@ def to_adj(edge_index):
 
 
 def adjust_feature_values(x):
-    x_first_50 = (x[:, :50] - 0.5) * 2
-    x_last_50 = x[:, 50:] * 2
+    x_first_50 = (x[:, :50] - 0.5)
+    x_last_50 = x[:, 50:]
 
     return torch.cat((x_first_50, x_last_50), dim=1)
 
