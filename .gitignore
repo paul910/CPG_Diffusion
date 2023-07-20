@@ -2,6 +2,7 @@
 data/reveal/
 data/generated/
 data/show/
+model/store/
 diffusion/store/
 wandb/
 processed/

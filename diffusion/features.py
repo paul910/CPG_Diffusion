@@ -34,7 +34,8 @@ class Features(DiffusionManager):
             return model_mean + torch.sqrt(posterior_variance_t) * noise
 
     def loss(self, graph):
-        x = adjust_feature_values(graph.x)
+        # x = adjust_feature_values(graph.x)
+        x = graph.x
 
         t = torch.randint(0, self.T, (1,), device=self.device).long()
         x_t, x_noise = self.forward_diffusion_sample(x, t)
