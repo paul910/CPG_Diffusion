@@ -21,8 +21,8 @@ class Logger:
     def val_log(self, mean_losses_adj, mean_losses_features):
         if self.log_wandb:
             self.wandb.log({
-                "val_adjacency_loss": mean_losses_adj["total_loss"],
-                "val_features_loss": mean_losses_features["total_loss"]
+                "val_adjacency_loss": mean_losses_adj,
+                "val_features_loss": mean_losses_features
             })
 
     def train_log(self, train_loss_adj, train_loss_features):
