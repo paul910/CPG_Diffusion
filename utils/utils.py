@@ -26,7 +26,7 @@ def adjust_feature_values(x):
     x_first_50 = x[:, :50]
     x_last_50 = x[:, 50:] / 2 + 0.5
 
-    return torch.cat((x_first_50, x_last_50), dim=1)
+    return torch.cat((x_first_50, x_last_50), dim=1)[:, 50:]
 
 
 def plot(value, x_axis=None, yaxis=None, title=None):
