@@ -109,14 +109,18 @@ class Diffusion:
 
             out_adj.append(adj)
             out_x.append(x)
-            for i in reversed(range(self.config.getint("TRAINING", "T"))):
+
+            T = self.config.getint("TRAINING", "T")
+            for i in tqdm(reversed(range(T)), total=T, desc="ADJ Sampling"):
                 t = torch.full((1,), i, dtype=torch.long, device=self.device)
                 edge_index, _ = dense_to_sparse(adj)
                 adj = self.adjacency.sample_timestep(Data(x=x, edge_index=edge_index), t).squeeze(0)
                 out_adj.append(adj)
 
+            adj = self.ensure_adj(adj)
+
             edge_index, _ = dense_to_sparse(adj)
-            for i in reversed(range(self.config.getint("TRAINING", "T"))):
+            for i in tqdm(reversed(range(T)), total=T, desc="Features Sampling"):
                 t = torch.full((1,), i, dtype=torch.long, device=self.device)
                 x = self.features.sample_timestep(Data(x=x, edge_index=edge_index), t)
                 x = x if i == 0 else x.clamp(-1, 1)
@@ -183,14 +187,28 @@ class Diffusion:
         plot_array(out_adj, "Nodes", "Nodes", "Sample Adjacency")
         plot_array(out_x, "Features", "Nodes", "Sample Features")
 
-        # ensure 0/1 encoding for last timestep in adjacency by thresholding
-        out_adj[-1] = torch.where(out_adj[-1] >= 0.5, torch.tensor(1.), torch.tensor(0.))
-        plot(out_adj[-1], "Nodes", "Nodes", "Thresholded Sample")
+        out_adj[-1]= self.ensure_adj(out_adj[-1])
+        out_x[-1] = self.ensure_features(out_x[-1])
 
-        # ensure one hot encoding for first 50 features in last timestep
-        max_values, _ = torch.max(out_x[-1][:, :50], dim=1, keepdim=True)
-        out_x[-1][:, :50] = torch.where(out_x[-1][:, :50] == max_values, torch.tensor(1.), torch.tensor(-1.))
+        plot(out_adj[-1], "Nodes", "Nodes", "Thresholded Sample")
         plot(out_x[-1], "Features", "Nodes", "Thresholded Sample")
+
+    def ensure_features(self, features):
+        # ensure one hot encoding for first 50 features in last timestep
+        max_values, _ = torch.max(features[:, :50], dim=1, keepdim=True)
+        features[:, :50] = torch.where(features[:, :50] == max_values, torch.tensor(1.), torch.tensor(-1.))
+
+        return features
+
+    def ensure_adj(self, adj):
+        # thresholding by number of edges. num_edges = num_nodes * (avg_degree +- 0.3)
+        num_edges = int(adj.shape[-1] * (3.68 + random.uniform(-0.3, 0.3)))
+        values, _ = torch.sort(adj, descending=True)
+        threshold = values[num_edges - 1]
+        # ensure 0/1 encoding for last timestep in adjacency by thresholding
+        adj = torch.where(adj >= threshold, torch.tensor(1.), torch.tensor(0.))
+
+        return adj
 
     def start(self):
         if self.config.get('DEFAULT', 'mode') == 'train':
@@ -199,7 +217,8 @@ class Diffusion:
             data = self.sample()
             if not exists('data/generated'):
                 makedirs('data/generated')
-            torch.save(data, 'data/generated/data_' + str(datetime.now()) + '.pt')
+            filename = datetime.now().strftime("data_%Y_%m_%d_%H_%M_%S.pt")
+            torch.save(data, f'data/generated/{filename}')
 
             # Code reconstruction from generated data
             graph = data[0]

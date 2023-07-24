@@ -45,7 +45,8 @@ class DiffusionManager(ABC):
         alphas = 1. - self.betas
         alphas_cumprod = torch.cumprod(alphas, axis=0)
         alphas_cumprod_prev = F.pad(alphas_cumprod[:-1], (1, 0), value=1.0)
-        self.sqrt_recip_alphas = torch.sqrt(1.0 / alphas)
+        self.sqrt = torch.sqrt(1.0 / alphas)
+        self.sqrt_recip_alphas = self.sqrt
         self.sqrt_alphas_cumprod = torch.sqrt(alphas_cumprod)
         self.sqrt_one_minus_alphas_cumprod = torch.sqrt(1. - alphas_cumprod)
         self.posterior_variance = self.betas * (1. - alphas_cumprod_prev) / (1. - alphas_cumprod)
