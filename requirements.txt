@@ -1,6 +1,8 @@
 wandb
 numpy
 torch
+torch_scatter
+torch-sparse
 torch_geometric
 matplotlib
 tqdm
