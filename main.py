@@ -53,13 +53,10 @@ class Diffusion:
             console_log(f'Epoch: {epoch}', False)
 
             for step, graph in enumerate(tqdm(self.train_loader, total=len(self.train_loader), desc="Training")):
-                '''
                 self.adjacency.optimizer.zero_grad()
                 train_loss_adj = self.adjacency.loss(graph)
                 train_loss_adj.backward()
                 self.adjacency.optimizer.step()
-                '''
-                train_loss_adj = 0
 
                 self.features.optimizer.zero_grad()
                 train_loss_features = self.features.loss(graph)
