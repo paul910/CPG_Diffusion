@@ -3,26 +3,16 @@ import math
 import torch
 from torch import Tensor
 from torch import nn
-from torch_geometric.nn import GCNConv, SAGPooling, GATConv
+from torch_geometric.nn import SAGPooling, GATConv
+from cpg_reconstruction.layers import GDNConv, GDNInvConv
 from torch_geometric.typing import PairTensor
-from torch_geometric.utils import (
-    add_self_loops,
-    remove_self_loops,
-    to_torch_csr_tensor,
-)
+from torch_geometric.utils import (add_self_loops, remove_self_loops, to_torch_csr_tensor, )
 
 torch.autograd.set_detect_anomaly(True)
 
 
 class GraphUNet(torch.nn.Module):
-    def __init__(
-            self,
-            in_channels: int,
-            hidden_channels: int,
-            out_channels: int,
-            depth: int,
-            time_emb_dim: int,
-    ):
+    def __init__(self, in_channels: int, hidden_channels: int, out_channels: int, depth: int, time_emb_dim: int, ):
         super().__init__()
         assert depth >= 1
         self.in_channels = in_channels
@@ -32,11 +22,8 @@ class GraphUNet(torch.nn.Module):
         self.pool_ratios = 0.5
 
         self.time_emb_dim = time_emb_dim
-        self.time_mlp = nn.Sequential(
-            SinusoidalPositionEmbeddings(self.time_emb_dim),
-            nn.Linear(self.time_emb_dim, self.time_emb_dim),
-            nn.ReLU()
-        )
+        self.time_mlp = nn.Sequential(SinusoidalPositionEmbeddings(self.time_emb_dim),
+            nn.Linear(self.time_emb_dim, self.time_emb_dim), nn.ReLU())
 
         self.downs = nn.ModuleList()
         self.ups = nn.ModuleList()
@@ -92,9 +79,9 @@ class DownBlock(torch.nn.Module):
         super().__init__()
         self.act = nn.ReLU()
 
-        self.conv1 = GATConv(channels, channels, improved=True)
+        self.conv1 = GDNConv(channels, channels, improved=True)
         self.n1 = nn.LayerNorm(channels)
-        self.conv2 = GATConv(channels, channels, improved=True)
+        self.conv2 = GDNConv(channels, channels, improved=True)
         self.n2 = nn.LayerNorm(channels)
 
         self.pool = SAGPooling(channels, pool_ratio)
@@ -102,16 +89,14 @@ class DownBlock(torch.nn.Module):
 
     def forward(self, x, edge_index, edge_weight, t):
         edge_index, edge_weight = self.augment_adj(edge_index, edge_weight, x.size(0))
-        x, edge_index, edge_weight, _, perm, _ = self.pool(
-            x, edge_index, edge_weight)
+        x, edge_index, edge_weight, _, perm, _ = self.pool(x, edge_index, edge_weight)
 
         x = self.n1(self.act(self.conv1(x, edge_index, edge_weight)))
         x = x + self.act(self.time(t))
         x = self.n2(self.act(self.conv2(x, edge_index, edge_weight)))
         return x, edge_index, edge_weight, perm
 
-    def augment_adj(self, edge_index: Tensor, edge_weight: Tensor,
-                    num_nodes: int) -> PairTensor:
+    def augment_adj(self, edge_index: Tensor, edge_weight: Tensor, num_nodes: int) -> PairTensor:
         edge_index, edge_weight = remove_self_loops(edge_index, edge_weight)
         edge_index, edge_weight = add_self_loops(edge_index, edge_weight, num_nodes=num_nodes)
         adj = to_torch_csr_tensor(edge_index, edge_weight, size=(num_nodes, num_nodes))
@@ -127,9 +112,9 @@ class UpBlock(torch.nn.Module):
         super().__init__()
         self.act = nn.ReLU()
 
-        self.conv1 = GATConv(channels, channels, improved=True)
+        self.conv1 = GDNInvConv(channels, channels, improved=True)
         self.n1 = nn.LayerNorm(channels)
-        self.conv2 = GATConv(channels, channels, improved=True)
+        self.conv2 = GDNConv(channels, channels, improved=True)
         self.n2 = nn.LayerNorm(channels)
 
         self.time = nn.Linear(time_emb_dim, channels)
@@ -190,19 +175,14 @@ class Unet(nn.Module):
         out_dim = 1
         time_emb_dim = time_emb_dim
 
-        self.time_mlp = nn.Sequential(
-            SinusoidalPositionEmbeddings(time_emb_dim),
-            nn.Linear(time_emb_dim, time_emb_dim),
-            nn.ReLU()
-        )
+        self.time_mlp = nn.Sequential(SinusoidalPositionEmbeddings(time_emb_dim), nn.Linear(time_emb_dim, time_emb_dim),
+            nn.ReLU())
 
         self.conv_in = nn.Conv2d(in_channels, down_channels[0], 3, padding=1)
-        self.downs = nn.ModuleList([Block(down_channels[i], down_channels[i + 1], \
-                                          time_emb_dim) \
-                                    for i in range(len(down_channels) - 1)])
-        self.ups = nn.ModuleList([Block(up_channels[i], up_channels[i + 1], \
-                                        time_emb_dim, up=True) \
-                                  for i in range(len(up_channels) - 1)])
+        self.downs = nn.ModuleList(
+            [Block(down_channels[i], down_channels[i + 1], time_emb_dim) for i in range(len(down_channels) - 1)])
+        self.ups = nn.ModuleList(
+            [Block(up_channels[i], up_channels[i + 1], time_emb_dim, up=True) for i in range(len(up_channels) - 1)])
         self.conv_out = nn.Conv2d(up_channels[-1], out_dim, 1)
 
     def forward(self, x, timestep):

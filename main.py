@@ -12,6 +12,7 @@ from torch_geometric.loader import DataLoader
 from torch_geometric.utils import dense_to_sparse
 from tqdm import tqdm
 
+from cpg_reconstruction.reconstruction import process
 from data.dataset import CPGDataset
 from diffusion.adjacency import Adjacency
 from diffusion.features import Features
@@ -202,6 +203,10 @@ class Diffusion:
             if not exists('data/generated'):
                 makedirs('data/generated')
             torch.save(data, 'data/generated/data_' + str(datetime.now()) + '.pt')
+
+            # Code reconstruction from generated data
+            graph = data[0]
+            print(process(graph))
         elif self.config.get('DEFAULT', 'mode') == 'show':
             self.show_forward_diff()
             self.show_backward_diff()
