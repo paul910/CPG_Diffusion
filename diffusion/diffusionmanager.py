@@ -24,10 +24,10 @@ class DiffusionManager(ABC):
         self.time_emb_dim = self.model_config.getint('time_emb_dim')
         self.learning_rate = self.model_config.getfloat('learning_rate')
 
-        if not os.path.exists("model/store"):
-            os.makedirs("model/store")
+        if not os.path.exists("model"):
+            os.makedirs("model")
 
-        self.model_path = "model/store/" + model_name + "_depth" + str(self.depth) + "_start" + \
+        self.model_path = "model/" + model_name + "_depth" + str(self.depth) + "_start" + \
                           str(self.start_units) + "_hidden" + str(self.hidden_units) + "_time" + \
                           str(self.time_emb_dim) + ".pth"
 
@@ -45,8 +45,7 @@ class DiffusionManager(ABC):
         alphas = 1. - self.betas
         alphas_cumprod = torch.cumprod(alphas, axis=0)
         alphas_cumprod_prev = F.pad(alphas_cumprod[:-1], (1, 0), value=1.0)
-        self.sqrt = torch.sqrt(1.0 / alphas)
-        self.sqrt_recip_alphas = self.sqrt
+        self.sqrt_recip_alphas = torch.sqrt(1.0 / alphas)
         self.sqrt_alphas_cumprod = torch.sqrt(alphas_cumprod)
         self.sqrt_one_minus_alphas_cumprod = torch.sqrt(1. - alphas_cumprod)
         self.posterior_variance = self.betas * (1. - alphas_cumprod_prev) / (1. - alphas_cumprod)
