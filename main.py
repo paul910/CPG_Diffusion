@@ -135,13 +135,12 @@ class Diffusion:
             out_x = []
 
             if self.flag_adj:
-                adj = torch.randn((1, 1, num_nodes, num_nodes), device=self.device)
+                adj = torch.randn((1, 1, num_nodes, num_nodes)).to(self.device)
                 out_adj.append(adj)
 
                 for i in tqdm(reversed(range(self.T)), total=self.T, desc="ADJ Sampling"):
                     t = torch.full((1,), i, dtype=torch.long, device=self.device)
                     adj = self.adjacency.sample_timestep(adj, t)
-                    adj = adj if i == 0 else adj.clamp(0, 1)
                     out_adj.append(adj.squeeze(0).squeeze(0))
             else:
                 adj = to_adj(next(iter(self.train_loader)).edge_index)
