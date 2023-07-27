@@ -40,7 +40,7 @@ class DiffusionManager(ABC):
 
         self.optimizer = Adam(self.model.parameters(), lr=self.learning_rate)
 
-        self.T = config.getint('TRAINING', 'T')
+        self.T = config.getint('DEFAULT', 'T')
         self.betas = geometric_beta_schedule(timesteps=self.T)
         alphas = 1. - self.betas
         alphas_cumprod = torch.cumprod(alphas, axis=0)

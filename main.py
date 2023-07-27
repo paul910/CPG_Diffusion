@@ -28,8 +28,11 @@ class Diffusion:
         self.config = config
 
         self.epochs = config.getint('TRAINING', 'epochs')
-        self.T = config.getint('TRAINING', 'T')
+        self.T = config.getint('DEFAULT', 'T')
         self.num_node_features = config.getint('DATASET', 'num_node_features')
+
+        self.flag_adj = config.getboolean('DEBUG', 'adj')
+        self.flag_features = config.getboolean('DEBUG', 'features')
 
         if self.config.get('DEFAULT', 'mode') == "train" or self.config.get('DEFAULT', 'mode') == "show":
             self.dataset = CPGDataset(config.get('DATASET', 'dataset_path'),
@@ -56,22 +59,25 @@ class Diffusion:
             for step, graph in enumerate(tqdm(self.train_loader, total=len(self.train_loader), desc="Training")):
                 t = torch.randint(0, self.T, (1,), device=self.device).long()
 
-                adj = to_adj(graph.edge_index)
-                adj = pad(adj, self.adjacency.depth)
-                adj = adj.unsqueeze(0).to(self.device)
+                if self.flag_adj:
+                    adj = to_adj(graph.edge_index)
+                    adj = pad(adj, self.adjacency.depth)
+                    adj = adj.unsqueeze(0).to(self.device)
 
-                self.adjacency.optimizer.zero_grad()
-                train_loss_adj = self.adjacency.loss(adj, t)
-                train_loss_adj.backward()
-                self.adjacency.optimizer.step()
+                    self.adjacency.optimizer.zero_grad()
+                    train_loss_adj = self.adjacency.loss(adj, t)
+                    train_loss_adj.backward()
+                    self.adjacency.optimizer.step()
+                else:
+                    train_loss_adj = 0
 
-                '''
-                self.features.optimizer.zero_grad()
-                train_loss_features = self.features.loss(graph, t)
-                train_loss_features.backward()
-                self.features.optimizer.step()
-                '''
-                train_loss_features = 0
+                if self.flag_features:
+                    self.features.optimizer.zero_grad()
+                    train_loss_features = self.features.loss(graph, t)
+                    train_loss_features.backward()
+                    self.features.optimizer.step()
+                else:
+                    train_loss_features = 0
 
                 self.logger.train_log(train_loss_adj, train_loss_features)
 
@@ -90,8 +96,16 @@ class Diffusion:
 
         for graph in tqdm(self.test_loader, total=len(self.test_loader), desc="Validating"):
             t = torch.randint(0, self.T, (1,), device=self.device).long()
-            loss_adj += self.adjacency.loss(graph, t)
-            loss_features += self.features.loss(graph, t)
+
+            if self.flag_adj:
+                loss_adj += self.adjacency.loss(graph, t)
+            else:
+                loss_adj = 0
+
+            if self.flag_features:
+                loss_features += self.features.loss(graph, t)
+            else:
+                loss_features = 0
 
         mean_losses_adj = loss_adj / len(self.test_loader)
         mean_losses_features = loss_features / len(self.test_loader)
@@ -113,35 +127,40 @@ class Diffusion:
             num_nodes = num_nodes if pad == 0 else num_nodes + int(
                 math.pow(2, self.config.getint("MODEL_ADJ", "depth")) - pad)
 
-            adj = torch.randn((1, 1, num_nodes, num_nodes)).to(self.device)
-            x = torch.randn(num_nodes, self.num_node_features).to(self.device)
-
             out_adj = []
             out_x = []
 
-            out_adj.append(adj)
-            out_x.append(x)
+            if self.flag_adj:
+                adj = torch.randn((1, 1, num_nodes, num_nodes)).to(self.device)
+                out_adj.append(adj)
 
-            T = self.config.getint("TRAINING", "T")
-            for i in tqdm(reversed(range(T)), total=T, desc="ADJ Sampling"):
-                t = torch.full((1,), i, dtype=torch.long, device=self.device)
-                adj = self.adjacency.sample_timestep(adj, t)
-                out_adj.append(adj.squeeze(0).squeeze(0))
+                for i in tqdm(reversed(range(self.T)), total=self.T, desc="ADJ Sampling"):
+                    t = torch.full((1,), i, dtype=torch.long, device=self.device)
+                    adj = self.adjacency.sample_timestep(adj, t)
+                    out_adj.append(adj.squeeze(0).squeeze(0))
+            else:
+                adj = to_adj(next(iter(self.train_loader)).edge_index)
 
-            adj = self.ensure_adj(adj.squeeze(0).squeeze(0))
-            edge_index, _ = dense_to_sparse(adj)
-
-            for i in tqdm(reversed(range(T)), total=T, desc="Features Sampling"):
-                t = torch.full((1,), i, dtype=torch.long, device=self.device)
-                x = self.features.sample_timestep(Data(x=x, edge_index=edge_index), t)
-                x = x if i == 0 else x.clamp(-1, 1)
+            if self.flag_features:
+                x = torch.randn(num_nodes, self.num_node_features).to(self.device)
                 out_x.append(x)
+
+                adj = self.ensure_adj(adj.squeeze(0).squeeze(0))
+                edge_index, _ = dense_to_sparse(adj)
+
+                for i in tqdm(reversed(range(self.T)), total=self.T, desc="Features Sampling"):
+                    t = torch.full((1,), i, dtype=torch.long, device=self.device)
+                    x = self.features.sample_timestep(Data(x=x, edge_index=edge_index), t)
+                    x = x if i == 0 else x.clamp(-1, 1)
+                    out_x.append(x)
 
             if self.config.get("DEFAULT", "mode") == "show":
                 if not exists('data/show'):
                     makedirs('data/show')
-                torch.save(out_adj, f'./data/show/adj.pt')
-                torch.save(out_x, f'./data/show/x.pt')
+                if self.flag_adj:
+                    torch.save(out_adj, f'./data/show/adj.pt')
+                if self.flag_features:
+                    torch.save(out_x, f'./data/show/features.pt')
                 return out_adj, out_x
 
             data.append(Data(x=x, edge_index=edge_index))
@@ -158,60 +177,66 @@ class Diffusion:
         out_adj = []
         out_x = []
 
-        T = self.config.getint("TRAINING", "T")
         num_show = self.config.getint("SHOW", "num_show")
-        for t in range(0, T, (T - 1) // (num_show - 1)):
+        for t in range(0, self.T, (self.T - 1) // (num_show - 1)):
             t = torch.full((1,), t, dtype=torch.long, device=self.device)
 
-            adj, noise = self.adjacency.forward_diffusion_sample(adj, t)
-            adj = adj.clamp(0, 1)
-            out_adj.append(adj)
+            if self.flag_adj:
+                adj, noise = self.adjacency.forward_diffusion_sample(adj, t)
+                adj = adj.clamp(0, 1)
+                out_adj.append(adj)
 
-            x, noise = self.features.forward_diffusion_sample(x, t)
-            x = x.clamp(-1, 1)
-            out_x.append(x)
+            if self.flag_features:
+                x, noise = self.features.forward_diffusion_sample(x, t)
+                x = x.clamp(-1, 1)
+                out_x.append(x)
 
-        plot_array(out_adj, "Nodes", "Nodes", "Forward Diffusion Adjacency")
-        plot_array(out_x, "Features", "Nodes", "Forward Diffusion Features")
+        if self.flag_adj:
+            plot_array(out_adj, "Nodes", "Nodes", "Forward Diffusion Adjacency")
+        if self.flag_features:
+            plot_array(out_x, "Features", "Nodes", "Forward Diffusion Features")
 
     def show_backward_diff(self):
         console_log('Show sample')
 
-        if self.config.getboolean("SHOW", "pre_computed"):
-            adj, x = torch.load("data/show/adj.pt"), torch.load("data/show/x.pt")
-        else:
-            adj, x = self.sample()
+        adj, x = self.sample()
 
         out_adj = []
         out_x = []
 
-        T = self.config.getint("TRAINING", "T")
         num_show = self.config.getint("SHOW", "num_show")
-        for i in range(0, T, (T - 1) // (num_show - 1)):
-            if i > T - (T - 1) // (num_show - 1):
-                out_adj.append(adj[-1])
-                out_x.append(x[-1])
+        for i in range(0, self.T, (self.T - 1) // (num_show - 1)):
+            if i > self.T - (self.T - 1) // (num_show - 1):
+                if self.flag_adj:
+                    out_adj.append(adj[-1])
+                if self.flag_features:
+                    out_x.append(x[-1])
             else:
-                out_adj.append(adj[i])
-                out_x.append(x[i])
+                if self.flag_adj:
+                    out_adj.append(adj[i])
+                if self.flag_features:
+                    out_x.append(x[i])
 
-        plot_array(out_adj, "Nodes", "Nodes", "Sample Adjacency")
-        plot_array(out_x, "Features", "Nodes", "Sample Features")
+        if self.flag_adj:
+            plot_array(out_adj, "Nodes", "Nodes", "Sample Adjacency")
+            out_adj[-1] = self.ensure_adj(out_adj[-1])
+            plot(out_adj[-1], "Nodes", "Nodes", "Thresholded Sample")
 
-        out_adj[-1] = self.ensure_adj(out_adj[-1])
-        out_x[-1] = self.ensure_features(out_x[-1])
+        if self.flag_features:
+            plot_array(out_x, "Features", "Nodes", "Sample Features")
+            out_x[-1] = self.ensure_features(out_x[-1])
+            plot(out_x[-1], "Features", "Nodes", "Thresholded Sample")
 
-        plot(out_adj[-1], "Nodes", "Nodes", "Thresholded Sample")
-        plot(out_x[-1], "Features", "Nodes", "Thresholded Sample")
-
-    def ensure_features(self, features):
+    @staticmethod
+    def ensure_features(features):
         # ensure one hot encoding for first 50 features in last timestep
         max_values, _ = torch.max(features[:, :50], dim=1, keepdim=True)
         features[:, :50] = torch.where(features[:, :50] == max_values, torch.tensor(1.), torch.tensor(-1.))
 
         return features
 
-    def ensure_adj(self, adj):
+    @staticmethod
+    def ensure_adj(adj):
         # thresholding by number of edges. num_edges = num_nodes * (avg_degree +- 0.3)
         num_edges = int(adj.shape[-1] * (3.68 + random.uniform(-0.3, 0.3)))
         values, _ = torch.sort(torch.flatten(adj), descending=True)
