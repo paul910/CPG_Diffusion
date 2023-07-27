@@ -98,7 +98,10 @@ class Diffusion:
             t = torch.randint(0, self.T, (1,), device=self.device).long()
 
             if self.flag_adj:
-                loss_adj += self.adjacency.loss(to_adj(graph.edge_index).unsqueeze(0), t)
+                adj = to_adj(graph.edge_index)
+                adj = pad(adj, self.adjacency.depth)
+                adj = adj.unsqueeze(0).to(self.device)
+                loss_adj += self.adjacency.loss(adj, t)
             else:
                 loss_adj = 0
 
