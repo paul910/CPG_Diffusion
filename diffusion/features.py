@@ -33,10 +33,9 @@ class Features(DiffusionManager):
             noise = torch.randn_like(graph.x)
             return model_mean + torch.sqrt(posterior_variance_t) * noise
 
-    def loss(self, graph):
+    def loss(self, graph, t: Tensor):
         x = adjust_feature_values(graph.x)
 
-        t = torch.randint(0, self.T, (1,), device=self.device).long()
         x_t, x_noise = self.forward_diffusion_sample(x, t)
         x_noise_pred = self.model(x_t.to(self.device), graph.edge_index.to(self.device), t)
 

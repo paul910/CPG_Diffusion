@@ -1,8 +1,10 @@
+import math
 import shutil
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch_geometric.utils import to_dense_adj
 
 
@@ -104,3 +106,16 @@ def console_log(message: str, header=True):
         print(separator_line + "\n" + output_line + "\n" + separator_line)
     else:
         print(output_line)
+
+
+def pad(adj, model_depth):
+    padding_size = int(adj.shape[-1] % (math.pow(2, model_depth)))
+
+    if padding_size != 0:
+        pad = int(math.pow(2, model_depth) - padding_size)
+        if pad % 2 == 0:
+            return F.pad(adj, (pad // 2, pad // 2, pad // 2, pad // 2), "constant", 0)
+        else:
+            return F.pad(adj, (pad // 2, pad // 2 + 1, pad // 2, pad // 2 + 1), "constant", 0)
+
+    return adj

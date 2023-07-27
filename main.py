@@ -17,7 +17,7 @@ from data.dataset import CPGDataset
 from diffusion.adjacency import Adjacency
 from diffusion.features import Features
 from utils.logger import Logger
-from utils.utils import console_log, adjust_feature_values, plot_array, to_adj, plot
+from utils.utils import console_log, adjust_feature_values, plot_array, to_adj, plot, pad
 
 warnings.filterwarnings("ignore")
 
@@ -28,6 +28,7 @@ class Diffusion:
         self.config = config
 
         self.epochs = config.getint('TRAINING', 'epochs')
+        self.T = config.getint('TRAINING', 'T')
         self.num_node_features = config.getint('DATASET', 'num_node_features')
 
         if self.config.get('DEFAULT', 'mode') == "train" or self.config.get('DEFAULT', 'mode') == "show":
@@ -53,15 +54,22 @@ class Diffusion:
             console_log(f'Epoch: {epoch}', False)
 
             for step, graph in enumerate(tqdm(self.train_loader, total=len(self.train_loader), desc="Training")):
+                t = torch.randint(0, self.T, (1,), device=self.device).long()
+
+                adj = to_adj(graph.edge_index)
+                adj = pad(adj, self.adjacency.depth)
+                adj = adj.unsqueeze(0).to(self.device)
+
                 self.adjacency.optimizer.zero_grad()
-                train_loss_adj = self.adjacency.loss(graph)
+                train_loss_adj = self.adjacency.loss(adj, t)
                 train_loss_adj.backward()
                 self.adjacency.optimizer.step()
 
                 self.features.optimizer.zero_grad()
-                train_loss_features = self.features.loss(graph)
+                train_loss_features = self.features.loss(graph, t)
                 train_loss_features.backward()
                 self.features.optimizer.step()
+
                 self.logger.train_log(train_loss_adj, train_loss_features)
 
             self.adjacency.save_model()
@@ -78,8 +86,9 @@ class Diffusion:
         self.features.model.eval()
 
         for graph in tqdm(self.test_loader, total=len(self.test_loader), desc="Validating"):
-            loss_adj += self.adjacency.loss(graph)
-            loss_features += self.features.loss(graph)
+            t = torch.randint(0, self.T, (1,), device=self.device).long()
+            loss_adj += self.adjacency.loss(graph, t)
+            loss_features += self.features.loss(graph, t)
 
         mean_losses_adj = loss_adj / len(self.test_loader)
         mean_losses_features = loss_features / len(self.test_loader)
@@ -101,7 +110,7 @@ class Diffusion:
             num_nodes = num_nodes if pad == 0 else num_nodes + int(
                 math.pow(2, self.config.getint("MODEL_ADJ", "depth")) - pad)
 
-            adj = torch.randint(2, (num_nodes, num_nodes)).to(self.device)
+            adj = torch.randn((1, 1, num_nodes, num_nodes)).to(self.device)
             x = torch.randn(num_nodes, self.num_node_features).to(self.device)
 
             out_adj = []
@@ -113,13 +122,12 @@ class Diffusion:
             T = self.config.getint("TRAINING", "T")
             for i in tqdm(reversed(range(T)), total=T, desc="ADJ Sampling"):
                 t = torch.full((1,), i, dtype=torch.long, device=self.device)
-                edge_index, _ = dense_to_sparse(adj)
-                adj = self.adjacency.sample_timestep(Data(x=x, edge_index=edge_index), t).squeeze(0)
-                out_adj.append(adj)
+                adj = self.adjacency.sample_timestep(adj, t)
+                out_adj.append(adj.squeeze(0).squeeze(0))
 
-            adj = self.ensure_adj(adj)
-
+            adj = self.ensure_adj(adj.squeeze(0).squeeze(0))
             edge_index, _ = dense_to_sparse(adj)
+
             for i in tqdm(reversed(range(T)), total=T, desc="Features Sampling"):
                 t = torch.full((1,), i, dtype=torch.long, device=self.device)
                 x = self.features.sample_timestep(Data(x=x, edge_index=edge_index), t)
@@ -187,7 +195,7 @@ class Diffusion:
         plot_array(out_adj, "Nodes", "Nodes", "Sample Adjacency")
         plot_array(out_x, "Features", "Nodes", "Sample Features")
 
-        out_adj[-1]= self.ensure_adj(out_adj[-1])
+        out_adj[-1] = self.ensure_adj(out_adj[-1])
         out_x[-1] = self.ensure_features(out_x[-1])
 
         plot(out_adj[-1], "Nodes", "Nodes", "Thresholded Sample")
@@ -203,7 +211,7 @@ class Diffusion:
     def ensure_adj(self, adj):
         # thresholding by number of edges. num_edges = num_nodes * (avg_degree +- 0.3)
         num_edges = int(adj.shape[-1] * (3.68 + random.uniform(-0.3, 0.3)))
-        values, _ = torch.sort(adj, descending=True)
+        values, _ = torch.sort(torch.flatten(adj), descending=True)
         threshold = values[num_edges - 1]
         # ensure 0/1 encoding for last timestep in adjacency by thresholding
         adj = torch.where(adj >= threshold, torch.tensor(1.), torch.tensor(0.))
