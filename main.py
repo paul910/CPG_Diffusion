@@ -98,7 +98,7 @@ class Diffusion:
             t = torch.randint(0, self.T, (1,), device=self.device).long()
 
             if self.flag_adj:
-                loss_adj += self.adjacency.loss(graph, t)
+                loss_adj += self.adjacency.loss(to_adj(graph.edge_index).unsqueeze(0), t)
             else:
                 loss_adj = 0
 
@@ -122,6 +122,7 @@ class Diffusion:
         for _ in tqdm(range(self.config.getint("SAMPLING", "num_samples")), desc='Sampling'):
             num_nodes = random.randint(self.config.getint('DATASET', 'min_nodes'),
                                        self.config.getint('DATASET', 'max_nodes'))
+            num_nodes = 100 # TODO: Remove this line
 
             pad = num_nodes % math.pow(2, self.config.getint("MODEL_ADJ", "depth"))
             num_nodes = num_nodes if pad == 0 else num_nodes + int(
@@ -208,12 +209,12 @@ class Diffusion:
         for i in range(0, self.T, (self.T - 1) // (num_show - 1)):
             if i > self.T - (self.T - 1) // (num_show - 1):
                 if self.flag_adj:
-                    out_adj.append(adj[-1])
+                    out_adj.append(adj[-1].squeeze(0).squeeze(0))
                 if self.flag_features:
                     out_x.append(x[-1])
             else:
                 if self.flag_adj:
-                    out_adj.append(adj[i])
+                    out_adj.append(adj[i].squeeze(0).squeeze(0))
                 if self.flag_features:
                     out_x.append(x[i])
 
