@@ -7,9 +7,8 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.optim import Adam
 
-from datatype import Graph
 from diffusion.model import GraphUNet, Unet
-from utils.utils import geometric_beta_schedule
+from utils.utils import get_index_from_list, geometric_beta_schedule
 
 
 class DiffusionManager(ABC):
@@ -25,8 +24,6 @@ class DiffusionManager(ABC):
         self.hidden_units = self.model_config.getint('hidden_units')
         self.time_emb_dim = self.model_config.getint('time_emb_dim')
         self.learning_rate = self.model_config.getfloat('learning_rate')
-
-        self.num_node_features = config.getint('DATASET', 'num_node_features')
 
         if not os.path.exists("model"):
             os.makedirs("model")
@@ -61,28 +58,17 @@ class DiffusionManager(ABC):
         if os.path.exists(self.model_path):
             self.model.load_state_dict(torch.load(self.model_path, map_location=self.device))
 
+    def forward_diffusion_sample(self, input: Tensor, t: Tensor):
+        noise = torch.randn_like(input)
+        sqrt_alphas_cumprod_t = get_index_from_list(self.sqrt_alphas_cumprod, t, input.shape)
+        sqrt_one_minus_alphas_cumprod_t = get_index_from_list(self.sqrt_one_minus_alphas_cumprod, t, input.shape)
+        return sqrt_alphas_cumprod_t.to(self.device) * input.to(self.device) + sqrt_one_minus_alphas_cumprod_t.to(
+            self.device) * noise.to(self.device), noise.to(self.device)
+
     @abstractmethod
-    def forward_diffusion_sample(self, graph: Graph, t: Tensor) -> Tensor:
+    def sample_timestep(self, graph, t):
         pass
 
     @abstractmethod
-    def sample_timestep(self, graph: Graph, t: Tensor) -> Graph:
+    def loss(self, graph):
         pass
-
-    @abstractmethod
-    def loss(self, graph: Graph, t: Tensor):
-        pass
-
-    @abstractmethod
-    def ensure_valid(self, graph: Graph):
-        pass
-
-    @abstractmethod
-    def get_tensor(self, graph: Graph) -> Tensor:
-        pass
-
-    def get_noisy_graph(self, num_nodes: int, num_node_features: int) -> Graph:
-        adj = torch.randn(num_nodes, num_nodes).to(self.device)
-        features = torch.randn(num_nodes, num_node_features).to(self.device)
-
-        return Graph(adj=adj, features=features, model_adj_depth=self.config.getint('MODEL_ADJ', 'depth'))

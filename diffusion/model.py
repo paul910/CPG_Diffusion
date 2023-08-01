@@ -190,8 +190,6 @@ class Unet(nn.Module):
         self.output = nn.Conv2d(up_channels[-1], out_dim, 1)
 
     def forward(self, x, timestep):
-        x = x.unsqueeze(0).unsqueeze(0)
-
         t = self.time_mlp(timestep)
         x = self.conv0(x)
         residual_inputs = []
@@ -202,4 +200,4 @@ class Unet(nn.Module):
             residual_x = residual_inputs.pop()
             x = torch.cat((x, residual_x), dim=1)
             x = up(x, t)
-        return self.output(x).squeeze()
+        return self.output(x)

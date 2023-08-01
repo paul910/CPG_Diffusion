@@ -4,7 +4,7 @@ import random
 
 import torch
 import torch.nn.functional as F
-from torch_geometric.utils import to_dense_adj, dense_to_sparse
+from torch_geometric.utils import to_dense_adj
 
 
 def geometric_beta_schedule(timesteps, start=0.0001, end=0.02):
@@ -21,11 +21,6 @@ def get_index_from_list(vals, t, x_shape):
 
 def to_adj(edge_index):
     return to_dense_adj(edge_index).squeeze()
-
-
-def to_edge_index(adj):
-    edge_index, _ = dense_to_sparse(adj)
-    return edge_index
 
 
 def adjust_feature_values(x):
@@ -78,3 +73,22 @@ def get_pad_size(num_nodes, model_depth):
         pad = int(math.pow(2, model_depth) - padding_size)
         return pad
     return 0
+
+
+def ensure_features(features):
+    # ensure one hot encoding for first 50 features in last timestep
+    max_values, _ = torch.max(features[:, :50], dim=1, keepdim=True)
+    features[:, :50] = torch.where(features[:, :50] == max_values, torch.tensor(1.), torch.tensor(-1.))
+
+    return features
+
+
+def ensure_adj(adj):
+    # thresholding by number of edges. num_edges = num_nodes * (avg_degree +- 0.3)
+    num_edges = int(adj.shape[-1] * (3.68 + random.uniform(-0.3, 0.3)))
+    values, _ = torch.sort(torch.flatten(adj), descending=True)
+    threshold = values[num_edges - 1]
+    # ensure 0/1 encoding for last timestep in adjacency by thresholding
+    adj = torch.where(adj >= threshold, torch.tensor(1.), torch.tensor(0.))
+
+    return adj
