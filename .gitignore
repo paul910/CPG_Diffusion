@@ -1,8 +1,7 @@
 #CPG
 data/reveal/
 data/generated/
-data/show/
-model/store/
+model/
 wandb/
 processed/
 raw/

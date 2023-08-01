@@ -3,8 +3,8 @@ import os
 from abc import ABC, abstractmethod
 
 import torch
-from torch import Tensor
 import torch.nn.functional as F
+from torch import Tensor
 from torch.optim import Adam
 
 from diffusion.model import GraphUNet, Unet
@@ -15,6 +15,7 @@ class DiffusionManager(ABC):
 
     def __init__(self, config: configparser.ConfigParser, model_name: str):
         self.config = config
+        self.model_name = model_name
         self.model_config = config[model_name]
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -27,12 +28,12 @@ class DiffusionManager(ABC):
         if not os.path.exists("model"):
             os.makedirs("model")
 
-        self.model_path = "model/" + model_name + "_depth" + str(self.depth) + "_start" + \
-                          str(self.start_units) + "_hidden" + str(self.hidden_units) + "_time" + \
-                          str(self.time_emb_dim) + ".pth"
+        self.model_path = "model/" + model_name + "_depth" + str(self.depth) + "_start" + str(
+            self.start_units) + "_hidden" + str(self.hidden_units) + "_time" + str(self.time_emb_dim) + ".pth"
 
         if model_name == 'MODEL_X':
-            self.model = GraphUNet(self.start_units, self.hidden_units, self.start_units, self.depth, self.time_emb_dim).to(self.device)
+            self.model = GraphUNet(self.start_units, self.hidden_units, self.start_units, self.depth,
+                                   self.time_emb_dim).to(self.device)
         elif model_name == 'MODEL_ADJ':
             self.model = Unet(self.depth, self.start_units, self.time_emb_dim).to(self.device)
 
@@ -60,11 +61,9 @@ class DiffusionManager(ABC):
     def forward_diffusion_sample(self, input: Tensor, t: Tensor):
         noise = torch.randn_like(input)
         sqrt_alphas_cumprod_t = get_index_from_list(self.sqrt_alphas_cumprod, t, input.shape)
-        sqrt_one_minus_alphas_cumprod_t = get_index_from_list(
-            self.sqrt_one_minus_alphas_cumprod, t, input.shape
-        )
-        return sqrt_alphas_cumprod_t.to(self.device) * input.to(self.device) \
-               + sqrt_one_minus_alphas_cumprod_t.to(self.device) * noise.to(self.device), noise.to(self.device)
+        sqrt_one_minus_alphas_cumprod_t = get_index_from_list(self.sqrt_one_minus_alphas_cumprod, t, input.shape)
+        return sqrt_alphas_cumprod_t.to(self.device) * input.to(self.device) + sqrt_one_minus_alphas_cumprod_t.to(
+            self.device) * noise.to(self.device), noise.to(self.device)
 
     @abstractmethod
     def sample_timestep(self, graph, t):

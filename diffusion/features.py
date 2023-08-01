@@ -17,14 +17,11 @@ class Features(DiffusionManager):
     @torch.no_grad()
     def sample_timestep(self, graph: Data, t: Tensor):
         betas_t = get_index_from_list(self.betas, t, graph.x.shape)
-        sqrt_one_minus_alphas_cumprod_t = get_index_from_list(
-            self.sqrt_one_minus_alphas_cumprod, t, graph.x.shape
-        )
+        sqrt_one_minus_alphas_cumprod_t = get_index_from_list(self.sqrt_one_minus_alphas_cumprod, t, graph.x.shape)
         sqrt_recip_alphas_t = get_index_from_list(self.sqrt_recip_alphas, t, graph.x.shape)
 
         model_mean = sqrt_recip_alphas_t * (
-                graph.x - betas_t * self.model(graph.x, graph.edge_index, t) / sqrt_one_minus_alphas_cumprod_t
-        )
+                graph.x - betas_t * self.model(graph.x, graph.edge_index, t) / sqrt_one_minus_alphas_cumprod_t)
         posterior_variance_t = get_index_from_list(self.posterior_variance, t, graph.x.shape)
 
         if t == 0:

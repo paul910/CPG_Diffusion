@@ -4,9 +4,10 @@ import torch
 from torch import Tensor
 from torch import nn
 from torch_geometric.nn import SAGPooling, GATConv
-from cpg_reconstruction.layers import GDNConv, GDNInvConv
 from torch_geometric.typing import PairTensor
 from torch_geometric.utils import (add_self_loops, remove_self_loops, to_torch_csr_tensor, )
+
+from cpg_reconstruction.layers import GDNConv, GDNInvConv
 
 torch.autograd.set_detect_anomaly(True)
 
@@ -23,7 +24,7 @@ class GraphUNet(torch.nn.Module):
 
         self.time_emb_dim = time_emb_dim
         self.time_mlp = nn.Sequential(SinusoidalPositionEmbeddings(self.time_emb_dim),
-            nn.Linear(self.time_emb_dim, self.time_emb_dim), nn.ReLU())
+                                      nn.Linear(self.time_emb_dim, self.time_emb_dim), nn.ReLU())
 
         self.downs = nn.ModuleList()
         self.ups = nn.ModuleList()
@@ -178,16 +179,19 @@ class Unet(nn.Module):
         self.time_mlp = nn.Sequential(SinusoidalPositionEmbeddings(time_emb_dim), nn.Linear(time_emb_dim, time_emb_dim),
             nn.ReLU())
 
-        self.conv_in = nn.Conv2d(in_channels, down_channels[0], 3, padding=1)
+        self.conv0 = nn.Conv2d(in_channels, down_channels[0], 3, padding=1)
+
         self.downs = nn.ModuleList(
             [Block(down_channels[i], down_channels[i + 1], time_emb_dim) for i in range(len(down_channels) - 1)])
+
         self.ups = nn.ModuleList(
             [Block(up_channels[i], up_channels[i + 1], time_emb_dim, up=True) for i in range(len(up_channels) - 1)])
-        self.conv_out = nn.Conv2d(up_channels[-1], out_dim, 1)
+
+        self.output = nn.Conv2d(up_channels[-1], out_dim, 1)
 
     def forward(self, x, timestep):
         t = self.time_mlp(timestep)
-        x = self.conv_in(x)
+        x = self.conv0(x)
         residual_inputs = []
         for down in self.downs:
             x = down(x, t)
@@ -196,4 +200,4 @@ class Unet(nn.Module):
             residual_x = residual_inputs.pop()
             x = torch.cat((x, residual_x), dim=1)
             x = up(x, t)
-        return self.conv_out(x)
+        return self.output(x)

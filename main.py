@@ -1,5 +1,4 @@
 import configparser
-import math
 import random
 import warnings
 from datetime import datetime
@@ -17,55 +16,53 @@ from data.dataset import CPGDataset
 from diffusion.adjacency import Adjacency
 from diffusion.features import Features
 from utils.logger import Logger
-from utils.utils import console_log, adjust_feature_values, plot_array, to_adj, plot, pad
+from utils.utils import adjust_feature_values, to_adj, get_pad_size, ensure_features, ensure_adj, adjust_adj_values
 
 warnings.filterwarnings("ignore")
 
 
 class Diffusion:
-    def __init__(self, config: configparser.ConfigParser):
+    def __init__(self, configuration: configparser.ConfigParser):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.config = config
+        self.config = configuration
 
-        self.epochs = config.getint('TRAINING', 'epochs')
-        self.T = config.getint('DEFAULT', 'T')
-        self.num_node_features = config.getint('DATASET', 'num_node_features')
+        self.T = self.config.getint('DEFAULT', 'T')
+        self.mode = self.config.get("DEFAULT", "mode")
 
-        self.flag_adj = config.getboolean('DEBUG', 'adj')
-        self.flag_features = config.getboolean('DEBUG', 'features')
+        self.log_step = self.config.getint('LOGGING', 'log_step')
 
-        if self.config.get('DEFAULT', 'mode') == "train" or self.config.get('DEFAULT', 'mode') == "show":
-            self.dataset = CPGDataset(config.get('DATASET', 'dataset_path'),
-                                      config.getint('DATASET', 'num_node_features'))
-            self.train_dataset, self.test_dataset = self.dataset.train_test_split()
-            self.train_loader = DataLoader(self.train_dataset, shuffle=True)
-            self.test_loader = DataLoader(self.test_dataset, shuffle=False)
+        self.num_samples = self.config.getint("SAMPLING", "num_samples")
+        self.epochs = self.config.getint('TRAINING', 'epochs')
+        self.model_adj_depth = self.config.getint("MODEL_ADJ", "depth")
 
-        self.adjacency = Adjacency(config)
-        self.features = Features(config)
+        self.flag_adj = self.config.getboolean('DEBUG', 'adj')
+        self.flag_features = self.config.getboolean('DEBUG', 'features')
 
-        self.logger = Logger(config)
+        self.min_nodes = self.config.getint('DATASET', 'min_nodes')
+        self.max_nodes = self.config.getint('DATASET', 'max_nodes')
+        self.num_node_features = self.config.getint('DATASET', 'num_node_features')
+        self.dataset_path = self.config.get('DATASET', 'dataset_path')
+        self.dataset = CPGDataset(self.dataset_path, self.num_node_features)
+        self.train_dataset, self.test_dataset = self.dataset.train_test_split()
+        self.train_loader = DataLoader(self.train_dataset, shuffle=True)
+        self.test_loader = DataLoader(self.test_dataset, shuffle=False)
+
+        self.adjacency = Adjacency(configuration)
+        self.features = Features(configuration)
+
+        self.logger = Logger(configuration)
 
     def train(self):
-        console_log('Model Training')
-
         for epoch in range(self.epochs):
-
             self.adjacency.model.train()
             self.features.model.train()
-
-            console_log(f'Epoch: {epoch}', False)
 
             for step, graph in enumerate(tqdm(self.train_loader, total=len(self.train_loader), desc="Training")):
                 t = torch.randint(0, self.T, (1,), device=self.device).long()
 
                 if self.flag_adj:
-                    adj = to_adj(graph.edge_index)
-                    adj = pad(adj, self.adjacency.depth)
-                    adj = adj.unsqueeze(0).to(self.device)
-
                     self.adjacency.optimizer.zero_grad()
-                    train_loss_adj = self.adjacency.loss(adj, t)
+                    train_loss_adj = self.adjacency.loss(graph.edge_index, t)
                     train_loss_adj.backward()
                     self.adjacency.optimizer.step()
                 else:
@@ -88,27 +85,16 @@ class Diffusion:
 
     @torch.no_grad()
     def validate(self):
-        loss_adj = 0
-        loss_features = 0
-
         self.adjacency.model.eval()
         self.features.model.eval()
 
+        loss_adj = 0
+        loss_features = 0
         for graph in tqdm(self.test_loader, total=len(self.test_loader), desc="Validating"):
             t = torch.randint(0, self.T, (1,), device=self.device).long()
 
-            if self.flag_adj:
-                adj = to_adj(graph.edge_index)
-                adj = pad(adj, self.adjacency.depth)
-                adj = adj.unsqueeze(0).to(self.device)
-                loss_adj += self.adjacency.loss(adj, t)
-            else:
-                loss_adj = 0
-
-            if self.flag_features:
-                loss_features += self.features.loss(graph, t)
-            else:
-                loss_features = 0
+            loss_adj += self.adjacency.loss(graph.edge_index, t) if self.flag_adj else 0
+            loss_features += self.features.loss(graph, t) if self.flag_features else 0
 
         mean_losses_adj = loss_adj / len(self.test_loader)
         mean_losses_features = loss_features / len(self.test_loader)
@@ -117,156 +103,92 @@ class Diffusion:
 
     @torch.no_grad()
     def sample(self):
-        self.adjacency.model.eval()
-        self.features.model.eval()
+        if not exists('data/generated'):
+            makedirs('data/generated')
 
-        data = []
+        for _ in tqdm(range(self.num_samples), desc='Sampling'):
+            num_nodes = random.randint(self.min_nodes, self.max_nodes)
+            num_nodes = num_nodes + get_pad_size(num_nodes, self.model_adj_depth)
 
-        for _ in tqdm(range(self.config.getint("SAMPLING", "num_samples")), desc='Sampling'):
-            num_nodes = random.randint(self.config.getint('DATASET', 'min_nodes'),
-                                       self.config.getint('DATASET', 'max_nodes'))
-            num_nodes = 100 # TODO: Remove this line
-
-            pad = num_nodes % math.pow(2, self.config.getint("MODEL_ADJ", "depth"))
-            num_nodes = num_nodes if pad == 0 else num_nodes + int(
-                math.pow(2, self.config.getint("MODEL_ADJ", "depth")) - pad)
-
-            out_adj = []
-            out_x = []
+            num_nodes = 64
 
             if self.flag_adj:
-                adj = torch.randn((1, 1, num_nodes, num_nodes)).to(self.device)
-                out_adj.append(adj)
+                adj = torch.randn((1, 1, num_nodes, num_nodes), device=self.device)
 
-                for i in tqdm(reversed(range(self.T)), total=self.T, desc="ADJ Sampling"):
-                    t = torch.full((1,), i, dtype=torch.long, device=self.device)
+                for i in tqdm(reversed(range(self.T))):
+                    t = torch.full((1,), i, device=self.device, dtype=torch.long)
                     adj = self.adjacency.sample_timestep(adj, t)
-                    adj = adj.clamp(0, 1)
-                    out_adj.append(adj.squeeze(0).squeeze(0))
+                    adj = torch.clamp(adj, -1.0, 1.0)
+                    if self.mode == "show" and i % self.log_step == 0:
+                        self.logger.log_img(adj, "Sampled Adjacency")
+
+                adj = ensure_adj(adj.squeeze())
+                edge_index, _ = dense_to_sparse(adj)
             else:
-                adj = to_adj(next(iter(self.train_loader)).edge_index)
+                graph = next(iter(self.train_loader))
+                edge_index = graph.edge_index
 
             if self.flag_features:
                 x = torch.randn(num_nodes, self.num_node_features).to(self.device)
-                out_x.append(x)
-
-                adj = self.ensure_adj(adj.squeeze(0).squeeze(0))
-                edge_index, _ = dense_to_sparse(adj)
 
                 for i in tqdm(reversed(range(self.T)), total=self.T, desc="Features Sampling"):
                     t = torch.full((1,), i, dtype=torch.long, device=self.device)
                     x = self.features.sample_timestep(Data(x=x, edge_index=edge_index), t)
-                    x = x if i == 0 else x.clamp(-1, 1)
-                    out_x.append(x)
+                    x = torch.clamp(x, -1.0, 1.0)
 
-            if self.config.get("DEFAULT", "mode") == "show":
-                if not exists('data/show'):
-                    makedirs('data/show')
-                if self.flag_adj:
-                    torch.save(out_adj, f'./data/show/adj.pt')
-                if self.flag_features:
-                    torch.save(out_x, f'./data/show/features.pt')
-                return out_adj, out_x
+                    if self.mode == "show" and i % self.log_step == 0:
+                        self.logger.log_img(x, "Sampled Features")
 
-            data.append(Data(x=x, edge_index=edge_index))
-
-        return data
-
-    def show_forward_diff(self):
-        console_log('Show forward diffusion')
-
-        graph = next(iter(self.train_loader))
-        x = adjust_feature_values(graph[0].x)
-        adj = to_adj(graph[0].edge_index).squeeze(0)
-
-        out_adj = []
-        out_x = []
-
-        num_show = self.config.getint("SHOW", "num_show")
-        for t in range(0, self.T, (self.T - 1) // (num_show - 1)):
-            t = torch.full((1,), t, dtype=torch.long, device=self.device)
-
-            if self.flag_adj:
-                adj, noise = self.adjacency.forward_diffusion_sample(adj, t)
-                adj = adj.clamp(0, 1)
-                out_adj.append(adj)
-
-            if self.flag_features:
-                x, noise = self.features.forward_diffusion_sample(x, t)
-                x = x.clamp(-1, 1)
-                out_x.append(x)
-
-        if self.flag_adj:
-            plot_array(out_adj, "Nodes", "Nodes", "Forward Diffusion Adjacency")
-        if self.flag_features:
-            plot_array(out_x, "Features", "Nodes", "Forward Diffusion Features")
-
-    def show_backward_diff(self):
-        console_log('Show sample')
-
-        adj, x = self.sample()
-
-        out_adj = []
-        out_x = []
-
-        num_show = self.config.getint("SHOW", "num_show")
-        for i in range(0, self.T, (self.T - 1) // (num_show - 1)):
-            if i > self.T - (self.T - 1) // (num_show - 1):
-                if self.flag_adj:
-                    out_adj.append(adj[-1].squeeze(0).squeeze(0))
-                if self.flag_features:
-                    out_x.append(x[-1])
+                x = ensure_features(x)
             else:
-                if self.flag_adj:
-                    out_adj.append(adj[i].squeeze(0).squeeze(0))
-                if self.flag_features:
-                    out_x.append(x[i])
+                x = torch.randn(num_nodes, self.num_node_features).to(self.device)
+
+            graph = Data(x=x, edge_index=edge_index)
+
+            self.logger.log_img(to_adj(edge_index), "Adjacency")
+            self.logger.log_img(x, "Features")
+
+            filename = datetime.now().strftime("cpg_%Y_%m_%d_%H_%M_%S.pt")
+            torch.save(graph, f'data/generated/{filename}')
+
+    @torch.no_grad()
+    def show_forward_diff(self):
+        graph = next(iter(self.train_loader))
 
         if self.flag_adj:
-            plot_array(out_adj, "Nodes", "Nodes", "Sample Adjacency")
-            out_adj[-1] = self.ensure_adj(out_adj[-1])
-            plot(out_adj[-1], "Nodes", "Nodes", "Thresholded Sample")
+            adj = adjust_adj_values(to_adj(graph.edge_index))
+            for t in range(self.T):
+                t = torch.full((1,), t, dtype=torch.long, device=self.device)
+                adj, noise = self.adjacency.forward_diffusion_sample(adj, t)
+                adj = torch.clamp(adj, -1., 1.)
+
+                if t % self.log_step == 0:
+                    self.logger.log_img(adj, "Forward Diffusion Adjacency")
 
         if self.flag_features:
-            plot_array(out_x, "Features", "Nodes", "Sample Features")
-            out_x[-1] = self.ensure_features(out_x[-1])
-            plot(out_x[-1], "Features", "Nodes", "Thresholded Sample")
+            x = adjust_feature_values(graph.x)
+            for t in range(self.T):
+                t = torch.full((1,), t, dtype=torch.long, device=self.device)
+                x, noise = self.features.forward_diffusion_sample(x, t)
+                x = torch.clamp(x, -1., 1.)
 
-    @staticmethod
-    def ensure_features(features):
-        # ensure one hot encoding for first 50 features in last timestep
-        max_values, _ = torch.max(features[:, :50], dim=1, keepdim=True)
-        features[:, :50] = torch.where(features[:, :50] == max_values, torch.tensor(1.), torch.tensor(-1.))
-
-        return features
-
-    @staticmethod
-    def ensure_adj(adj):
-        # thresholding by number of edges. num_edges = num_nodes * (avg_degree +- 0.3)
-        num_edges = int(adj.shape[-1] * (3.68 + random.uniform(-0.3, 0.3)))
-        values, _ = torch.sort(torch.flatten(adj), descending=True)
-        threshold = values[num_edges - 1]
-        # ensure 0/1 encoding for last timestep in adjacency by thresholding
-        adj = torch.where(adj >= threshold, torch.tensor(1.), torch.tensor(0.))
-
-        return adj
+                if t % self.log_step == 0:
+                    self.logger.log_img(x, "Forward Diffusion Features")
 
     def start(self):
         if self.config.get('DEFAULT', 'mode') == 'train':
             self.train()
         elif self.config.get('DEFAULT', 'mode') == 'sample':
-            data = self.sample()
-            if not exists('data/generated'):
-                makedirs('data/generated')
-            filename = datetime.now().strftime("data_%Y_%m_%d_%H_%M_%S.pt")
-            torch.save(data, f'data/generated/{filename}')
-
-            # Code reconstruction from generated data
-            graph = data[0]
-            print(process(graph))
+            self.sample()
         elif self.config.get('DEFAULT', 'mode') == 'show':
             self.show_forward_diff()
-            self.show_backward_diff()
+            self.sample()
+        elif self.config.get('DEFAULT', 'mode') == 'code':
+            data = self.sample()
+            for i in range(len(data)):
+                self.logger.log_code(process(data[i]), "Code Reconstruction")
+
+        self.logger.close()
 
 
 if __name__ == '__main__':

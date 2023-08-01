@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from diffusion.diffusionmanager import DiffusionManager
-from utils.utils import get_index_from_list
+from utils.utils import get_index_from_list, adjust_adj_values, to_adj, pad
 
 
 class Adjacency(DiffusionManager):
@@ -32,7 +32,13 @@ class Adjacency(DiffusionManager):
             noise = torch.randn_like(adj)
             return model_mean + torch.sqrt(posterior_variance_t) * noise
 
-    def loss(self, adj: Tensor, t: Tensor):
+    def loss(self, edge_index: Tensor, t: Tensor):
+        adj = to_adj(edge_index)
+        adj = pad(adj, self.adjacency.depth)
+        adj = adj.unsqueeze(0).unsqueeze(0).to(self.device)
+
+        adj = adjust_adj_values(adj)
+
         adj_t, adj_noise = self.forward_diffusion_sample(adj, t)
         adj_noise_pred = self.model(adj_t.to(self.device), t)
 

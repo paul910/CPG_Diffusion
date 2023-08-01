@@ -16,7 +16,8 @@ from torch_sparse import SparseTensor, fill_diag, mul
 from torch_sparse import sum as sparsesum
 
 
-def gcn_norm(edge_index, edge_weight=None, num_nodes=None, improved=False, add_self_loops=True, dtype=None):
+def gcn_norm(edge_index, edge_weight=None, num_nodes=None, improved=False,
+             add_self_loops=True, dtype=None):
     fill_value = 2. if improved else 1.
 
     if isinstance(edge_index, SparseTensor):
@@ -39,7 +40,8 @@ def gcn_norm(edge_index, edge_weight=None, num_nodes=None, improved=False, add_s
             edge_weight = torch.ones((edge_index.size(1),), dtype=dtype, device=edge_index.device)
 
         if add_self_loops:
-            edge_index, tmp_edge_weight = add_remaining_self_loops(edge_index, edge_weight, fill_value, num_nodes)
+            edge_index, tmp_edge_weight = add_remaining_self_loops(
+                edge_index, edge_weight, fill_value, num_nodes)
             assert tmp_edge_weight is not None
             edge_weight = tmp_edge_weight
 
@@ -105,8 +107,8 @@ def gdn_inv_norm(edge_index, edge_weight=None, num_nodes=None, dtype=None):
 
 
 class GDNConv(MessagePassing):
-    def __init__(self, in_channels: int, out_channels: int, edge_dim: Optional[int] = None, bias: bool = False,
-                 **kwargs):
+    def __init__(self, in_channels: int, out_channels: int, edge_dim: Optional[int] = None,
+                 bias: bool = False, **kwargs):
 
         kwargs.setdefault('aggr', 'add')
         super().__init__(**kwargs)
@@ -114,7 +116,8 @@ class GDNConv(MessagePassing):
         self.in_channels = in_channels
         self.out_channels = out_channels
 
-        self.lin = Linear(in_channels, out_channels, bias=False, weight_initializer='glorot')
+        self.lin = Linear(in_channels, out_channels, bias=False,
+                          weight_initializer='glorot')
 
         if bias:
             self.bias = Parameter(torch.Tensor(out_channels))
@@ -122,7 +125,8 @@ class GDNConv(MessagePassing):
             self.register_parameter('bias', None)
 
         if edge_dim is not None:
-            self.edge_lin = Linear(edge_dim, out_channels, bias=False, weight_initializer='glorot')
+            self.edge_lin = Linear(edge_dim, out_channels, bias=False,
+                                   weight_initializer='glorot')
 
         self.reset_parameters()
 
@@ -130,18 +134,23 @@ class GDNConv(MessagePassing):
         self.lin.reset_parameters()
         zeros(self.bias)
 
-    def forward(self, x: Tensor, edge_index: Adj, edge_weight: OptTensor = None, edge_attr: OptTensor = None) -> Tensor:
+    def forward(self, x: Tensor, edge_index: Adj,
+                edge_weight: OptTensor = None, edge_attr: OptTensor = None) -> Tensor:
         before_edge_index = edge_index
         if isinstance(edge_index, Tensor):
-            edge_index, edge_weight = gdn_norm(edge_index, edge_weight, x.size(self.node_dim), torch.float32)
+            edge_index, edge_weight = gdn_norm(
+                edge_index, edge_weight, x.size(self.node_dim), torch.float32)
         elif isinstance(edge_index, SparseTensor):
             raise NotImplementedError("Sparse adjacency is currently unsupported. Please use edge_index")
         x = self.lin(x)
 
         if edge_attr is not None:
             edge_attr = self.edge_lin(edge_attr)
-            edge_attr_ = torch.zeros((edge_index.shape[1], self.out_channels), device=edge_index.device,
-                                     dtype=edge_attr.dtype)
+            edge_attr_ = torch.zeros(
+                (edge_index.shape[1], self.out_channels),
+                device=edge_index.device,
+                dtype=edge_attr.dtype
+            )
             for i, edge in enumerate(edge_index.T):
                 matches = (edge == before_edge_index.T).all(dim=1)
                 if matches.any():
@@ -149,7 +158,13 @@ class GDNConv(MessagePassing):
             edge_attr = edge_attr_
 
         # propagate_type: (x: Tensor, edge_weight: OptTensor)
-        out = self.propagate(edge_index, x=x, edge_weight=edge_weight, edge_attr=edge_attr, size=None)
+        out = self.propagate(
+            edge_index,
+            x=x,
+            edge_weight=edge_weight,
+            edge_attr=edge_attr,
+            size=None
+        )
 
         if self.bias is not None:
             out += self.bias
@@ -163,8 +178,8 @@ class GDNConv(MessagePassing):
 
 
 class GDNInvConv(MessagePassing):
-    def __init__(self, in_channels: int, out_channels: int, edge_dim: Optional[int] = None, bias: bool = False,
-                 **kwargs):
+    def __init__(self, in_channels: int, out_channels: int, edge_dim: Optional[int] = None,
+                 bias: bool = False, **kwargs):
 
         kwargs.setdefault('aggr', 'add')
         super().__init__(**kwargs)
@@ -172,7 +187,8 @@ class GDNInvConv(MessagePassing):
         self.in_channels = in_channels
         self.out_channels = out_channels
 
-        self.lin = Linear(in_channels, out_channels, bias=False, weight_initializer='glorot')
+        self.lin = Linear(in_channels, out_channels, bias=False,
+                          weight_initializer='glorot')
 
         if bias:
             self.bias = Parameter(torch.Tensor(out_channels))
@@ -180,7 +196,8 @@ class GDNInvConv(MessagePassing):
             self.register_parameter('bias', None)
 
         if edge_dim is not None:
-            self.edge_lin = Linear(edge_dim, out_channels, bias=False, weight_initializer='glorot')
+            self.edge_lin = Linear(edge_dim, out_channels, bias=False,
+                                   weight_initializer='glorot')
 
         self.reset_parameters()
 
@@ -188,10 +205,12 @@ class GDNInvConv(MessagePassing):
         self.lin.reset_parameters()
         zeros(self.bias)
 
-    def forward(self, x: Tensor, edge_index: Adj, edge_weight: OptTensor = None, edge_attr: OptTensor = None) -> Tensor:
+    def forward(self, x: Tensor, edge_index: Adj,
+                edge_weight: OptTensor = None, edge_attr: OptTensor = None) -> Tensor:
         before_edge_index = edge_index
         if isinstance(edge_index, Tensor):
-            edge_index, edge_weight = gdn_inv_norm(edge_index, edge_weight, x.size(self.node_dim), torch.float32)
+            edge_index, edge_weight = gdn_inv_norm(
+                edge_index, edge_weight, x.size(self.node_dim), torch.float32)
         elif isinstance(edge_index, SparseTensor):
             raise NotImplementedError("Sparse adjacency is currently unsupported. Please use edge_index")
 
@@ -199,8 +218,11 @@ class GDNInvConv(MessagePassing):
 
         if edge_attr is not None:
             edge_attr = self.edge_lin(edge_attr)
-            edge_attr_ = torch.zeros((edge_index.shape[1], self.out_channels), device=edge_index.device,
-                                     dtype=edge_attr.dtype)
+            edge_attr_ = torch.zeros(
+                (edge_index.shape[1], self.out_channels),
+                device=edge_index.device,
+                dtype=edge_attr.dtype
+            )
             for i, edge in enumerate(edge_index.T):
                 matches = (edge == before_edge_index.T).all(dim=1)
                 if matches.any():
@@ -208,7 +230,13 @@ class GDNInvConv(MessagePassing):
             edge_attr = edge_attr_
 
         # propagate_type: (x: Tensor, edge_weight: OptTensor)
-        out = self.propagate(edge_index, x=x, edge_weight=edge_weight, edge_attr=edge_attr, size=None)
+        out = self.propagate(
+            edge_index,
+            x=x,
+            edge_weight=edge_weight,
+            edge_attr=edge_attr,
+            size=None
+        )
 
         if self.bias is not None:
             out += self.bias
