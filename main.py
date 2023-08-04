@@ -59,7 +59,7 @@ class Diffusion:
             self.adjacency.model.train()
             self.features.model.train()
 
-            for step, graph in enumerate(tqdm(self.train_loader, total=len(self.train_loader), desc="Training")):
+            for graph in tqdm(self.train_loader, total=len(self.train_loader), desc="Training"):
                 if self.vulnerability and graph[0].y == 0:
                     continue
                 elif not self.vulnerability and graph[0].y == 1:
@@ -98,6 +98,11 @@ class Diffusion:
         loss_adj = 0
         loss_features = 0
         for graph in tqdm(self.test_loader, total=len(self.test_loader), desc="Validating"):
+            if self.vulnerability and graph[0].y == 0:
+                continue
+            elif not self.vulnerability and graph[0].y == 1:
+                continue
+
             t = torch.randint(0, self.T, (1,), device=self.device).long()
 
             loss_adj += self.adjacency.loss(graph.edge_index, t) if self.flag_adj else 0
