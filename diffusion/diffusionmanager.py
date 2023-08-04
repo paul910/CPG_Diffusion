@@ -70,5 +70,5 @@ class DiffusionManager(ABC):
         pass
 
     @abstractmethod
-    def loss(self, graph):
+    def loss(self, graph, t):
         pass

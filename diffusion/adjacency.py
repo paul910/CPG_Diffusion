@@ -34,7 +34,7 @@ class Adjacency(DiffusionManager):
 
     def loss(self, edge_index: Tensor, t: Tensor):
         adj = to_adj(edge_index)
-        adj = pad(adj, self.adjacency.depth)
+        adj = pad(adj, self.depth)
         adj = adj.unsqueeze(0).unsqueeze(0).to(self.device)
 
         adj = adjust_adj_values(adj)
