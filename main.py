@@ -29,7 +29,7 @@ class Diffusion:
         self.T = self.config.getint('DEFAULT', 'T')
         self.mode = self.config.get("DEFAULT", "mode")
 
-        self.vulnerabilities = self.config.getboolean('DEFAULT', 'vulnerabilities')
+        self.vulnerability = self.config.getboolean('DEFAULT', 'vulnerability')
 
         self.log_step = self.config.getint('LOGGING', 'log_step')
 
@@ -60,9 +60,9 @@ class Diffusion:
             self.features.model.train()
 
             for step, graph in enumerate(tqdm(self.train_loader, total=len(self.train_loader), desc="Training")):
-                if self.vulnerabilities and graph[0].y == 0:
+                if self.vulnerability and graph[0].y == 0:
                     continue
-                elif not self.vulnerabilities and graph[0].y == 1:
+                elif not self.vulnerability and graph[0].y == 1:
                     continue
 
                 t = torch.randint(0, self.T, (1,), device=self.device).long()
