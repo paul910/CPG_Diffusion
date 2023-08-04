@@ -110,8 +110,6 @@ class Diffusion:
             num_nodes = random.randint(self.min_nodes, self.max_nodes)
             num_nodes = num_nodes + get_pad_size(num_nodes, self.model_adj_depth)
 
-            num_nodes = 64
-
             if self.flag_adj:
                 adj = torch.randn((1, 1, num_nodes, num_nodes), device=self.device)
 
@@ -145,8 +143,8 @@ class Diffusion:
 
             graph = Data(x=x, edge_index=edge_index)
 
-            self.logger.log_img(to_adj(edge_index), "Adjacency")
-            self.logger.log_img(x, "Features")
+            self.logger.log_img(to_adj(edge_index), f"Adjacency {num_nodes}")
+            self.logger.log_img(x, f"Features {num_nodes}")
 
             filename = datetime.now().strftime("cpg_%Y_%m_%d_%H_%M_%S.pt")
             torch.save(graph, f'data/generated/{filename}')
