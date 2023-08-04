@@ -28,8 +28,10 @@ class DiffusionManager(ABC):
         if not os.path.exists("model"):
             os.makedirs("model")
 
-        self.model_path = "model/" + model_name + "_depth" + str(self.depth) + "_start" + str(
-            self.start_units) + "_hidden" + str(self.hidden_units) + "_time" + str(self.time_emb_dim) + ".pth"
+        self.model_path = "model/" + ("" if self.config.getboolean("DEFAULT",
+                                                                   "vulnerability") else "non_") + "vulnerable" + model_name + "_depth" + str(
+            self.depth) + "_start" + str(self.start_units) + "_hidden" + str(self.hidden_units) + "_time" + str(
+            self.time_emb_dim) + ".pth"
 
         if model_name == 'MODEL_X':
             self.model = GraphUNet(self.start_units, self.hidden_units, self.start_units, self.depth,
