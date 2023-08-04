@@ -181,7 +181,7 @@ class Diffusion:
         elif self.config.get('DEFAULT', 'mode') == 'sample':
             self.sample()
         elif self.config.get('DEFAULT', 'mode') == 'show':
-            self.show_forward_diff()
+            # self.show_forward_diff()
             self.sample()
         elif self.config.get('DEFAULT', 'mode') == 'code':
             data = self.sample()
