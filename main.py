@@ -56,9 +56,6 @@ class Diffusion:
 
     def train(self):
         for epoch in range(self.epochs):
-            self.adjacency.model.train()
-            self.features.model.train()
-
             for graph in tqdm(self.train_loader, total=len(self.train_loader), desc="Training"):
                 if self.vulnerability and graph[0].y == 0:
                     continue
@@ -92,9 +89,6 @@ class Diffusion:
 
     @torch.no_grad()
     def validate(self):
-        self.adjacency.model.eval()
-        self.features.model.eval()
-
         loss_adj = 0
         loss_features = 0
         for graph in tqdm(self.test_loader, total=len(self.test_loader), desc="Validating"):
