@@ -45,6 +45,6 @@ class Adjacency(DiffusionManager):
         adj_noise_pred.to(self.device)
         adj_noise.to(self.device)
 
-        mse_loss = F.mse_loss(adj_noise, adj_noise_pred)
+        mse_loss = F.l1_loss(adj_noise, adj_noise_pred)
 
         return mse_loss

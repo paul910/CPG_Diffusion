@@ -39,6 +39,6 @@ class Features(DiffusionManager):
         x_noise_pred.to(self.device)
         x_noise.to(self.device)
 
-        mse_loss = F.mse_loss(x_noise, x_noise_pred)
+        mse_loss = F.l1_loss(x_noise, x_noise_pred)
 
         return mse_loss
