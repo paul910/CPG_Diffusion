@@ -116,6 +116,8 @@ class Diffusion:
             num_nodes = random.randint(self.min_nodes, self.max_nodes)
             num_nodes = num_nodes + get_pad_size(num_nodes, self.model_adj_depth)
 
+            num_nodes = 64
+
             if self.flag_adj:
                 adj = torch.randn((1, 1, num_nodes, num_nodes), device=self.device)
 
@@ -196,7 +198,18 @@ class Diffusion:
 
 
 if __name__ == '__main__':
+
+
+
+
     config = configparser.ConfigParser()
     config.read('config.ini')
+
+    dataset_path = config.get('DATASET', 'dataset_path')
+    dataset = CPGDataset(dataset_path, 178)
+    train_dataset, test_dataset = dataset.train_test_split()
+    train_loader = DataLoader(train_dataset, shuffle=True)
+    data = next(iter(train_loader))
+    print(process(data))
 
     Diffusion(config).start()
